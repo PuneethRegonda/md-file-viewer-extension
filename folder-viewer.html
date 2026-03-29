@@ -315,6 +315,16 @@
       padding: 0 7px; border-radius: 8px; flex-shrink: 0;
     }
 
+    .refresh-btn {
+      display: flex; align-items: center; justify-content: center;
+      width: 22px; height: 22px; border-radius: 4px;
+      border: none; background: transparent; color: var(--text-secondary);
+      cursor: pointer; flex-shrink: 0; opacity: 0.5;
+    }
+    .refresh-btn:hover { opacity: 1; background: var(--bg-hover); color: var(--accent); }
+    .refresh-btn.spinning svg { animation: spin 0.6s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
 
     .folder-header-name-input {
       background: var(--bg);
@@ -1028,6 +1038,7 @@
       <div class="sidebar-header">
         <div class="view-name">
           <span class="view-name-text" id="viewName" title="Click to rename this view">Loading...</span>
+          <button class="refresh-btn" id="refreshBtn" title="Refresh — rescan files from disk"><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M1.705 8.005a.75.75 0 0 1 .834.656 5.5 5.5 0 0 0 9.592 2.97l-1.204-1.204a.25.25 0 0 1 .177-.427h3.646a.25.25 0 0 1 .25.25v3.646a.25.25 0 0 1-.427.177l-1.038-1.038a7.001 7.001 0 0 1-12.486-3.196.75.75 0 0 1 .656-.834Zm12.59-1.01a.75.75 0 0 1-.834-.656 5.5 5.5 0 0 0-9.592-2.97l1.204 1.204a.25.25 0 0 1-.177.427H1.25a.25.25 0 0 1-.25-.25V1.104a.25.25 0 0 1 .427-.177l1.038 1.038a7.001 7.001 0 0 1 12.486 3.196.75.75 0 0 1-.656.834Z"/></svg></button>
           <span class="file-count" id="fileCount">0</span>
         </div>
         <input type="text" class="search-box" id="searchBox" placeholder="Filter files..." autocomplete="off">
@@ -1516,6 +1527,32 @@
     // ===== SIDEBAR =====
     const fileListEl = document.getElementById('fileList');
     const fileCountEl = document.getElementById('fileCount');
+    const refreshBtn = document.getElementById('refreshBtn');
+
+    // Refresh button — rescan files from source folder
+    refreshBtn.addEventListener('click', () => {
+      if (!VIEW_NAME || VIEW_NAME === '__session__') {
+        showToast('Cannot refresh session views');
+        return;
+      }
+      refreshBtn.classList.add('spinning');
+      fetch(API + '/api/rescan/' + encodeURIComponent(VIEW_NAME), { method: 'POST' })
+        .then(r => r.json())
+        .then(result => {
+          refreshBtn.classList.remove('spinning');
+          if (result.ok) {
+            showToast('Refreshed — ' + result.fileCount + ' files');
+            // Reload page to pick up new file list
+            window.location.reload();
+          } else {
+            showToast(result.error || 'Refresh failed');
+          }
+        })
+        .catch(() => {
+          refreshBtn.classList.remove('spinning');
+          showToast('Server not running. Start with: mdview');
+        });
+    });
     const searchBox = document.getElementById('searchBox');
 
     fileCountEl.textContent = FILES.length;

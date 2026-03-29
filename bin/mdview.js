@@ -341,6 +341,46 @@ function runServer() {
       return;
     }
 
+    // Rescan view — re-read files from source folder
+    if (p.startsWith('/api/rescan/') && req.method === 'POST') {
+      const viewName = decodeURIComponent(p.slice('/api/rescan/'.length));
+      const views = readViews();
+      const match = views.find(v => v.viewName === viewName);
+      if (!match) { res.writeHead(404); res.end('{"error":"view not found"}'); return; }
+      if (!match.sourcePath || match.sourcePath === 'browser-upload') {
+        res.writeHead(400); res.end('{"error":"cannot rescan browser uploads"}'); return;
+      }
+      try {
+        const abs = match.sourcePath;
+        if (!fs.existsSync(abs)) { res.writeHead(404); res.end('{"error":"source path not found"}'); return; }
+        const isDir = fs.statSync(abs).isDirectory();
+        const files = [];
+        if (isDir) {
+          walkDir(abs).sort().forEach(full => {
+            const rel = path.relative(abs, full);
+            files.push({ id: full.replace(/\\/g, '/'), name: rel.replace(/\\/g, '/'), path: full.replace(/\\/g, '/') });
+          });
+        } else if (MD_EXT.test(abs)) {
+          const full = abs.replace(/\\/g, '/');
+          files.push({ id: full, name: path.basename(abs), path: full });
+        }
+        const FILE_LIMIT = 500;
+        if (files.length > FILE_LIMIT) files.length = FILE_LIMIT;
+        const label = match.folderName;
+        const data = { folderName: label, sourcePath: abs, files };
+        fs.writeFileSync(path.join(VIEWS_DIR, viewName + '.js'),
+          'window.__MDVIEW_DATA = ' + JSON.stringify(data).replace(/<\//g, '<\\/') + ';', 'utf-8');
+        // Update file count
+        match.fileCount = files.length;
+        match.lastOpened = Date.now();
+        writeViews(views);
+        res.end(JSON.stringify({ ok: true, fileCount: files.length }));
+      } catch(e) {
+        res.writeHead(500); res.end('{"error":"rescan failed"}');
+      }
+      return;
+    }
+
     // Lazy-load file content from disk
     if (p === '/api/file-content' && req.method === 'GET') {
       const filePath = decodeURIComponent(reqUrl.searchParams.get('path') || '');
