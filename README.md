@@ -30,6 +30,8 @@ npm install -g mdview-cli
 ```
 
 > Requires Node.js 14+. No other dependencies.
+>
+> **macOS permission error?** Run `sudo npm install -g mdview-cli` instead.
 
 **First run** creates a sample view automatically — just run `mdview` after install.
 

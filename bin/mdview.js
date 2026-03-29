@@ -41,7 +41,7 @@ function readViews() {
 function writeViews(views) {
   fs.writeFileSync(VIEWS_JSON, JSON.stringify(views, null, 2), 'utf-8');
   fs.writeFileSync(path.join(MDVIEW_HOME, 'views-index.js'),
-    'window.__MDVIEW_VIEWS = ' + JSON.stringify(views) + ';', 'utf-8');
+    'window.__MDVIEW_VIEWS = ' + JSON.stringify(views).replace(/<\//g, '<\\/') + ';', 'utf-8');
 }
 
 // ===== Helpers =====
@@ -62,6 +62,19 @@ function openView(viewName) {
   openBrowser(viewName ? u + '?view=' + viewName : u);
 }
 
+function walkDir(dir) {
+  const results = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      results.push(...walkDir(full));
+    } else if (MD_EXT.test(entry.name)) {
+      results.push(full);
+    }
+  }
+  return results;
+}
+
 // ===== Core: create view =====
 function createView(targetPath) {
   ensureHome();
@@ -72,9 +85,10 @@ function createView(targetPath) {
   const files = [];
 
   if (isDir) {
-    fs.readdirSync(abs).filter(f => MD_EXT.test(f)).sort().forEach(f => {
-      const full = path.join(abs, f).replace(/\\/g, '/');
-      files.push({ id: full, name: f, path: full, content: fs.readFileSync(path.join(abs, f), 'utf-8') });
+    walkDir(abs).sort().forEach(full => {
+      const rel = path.relative(abs, full);
+      const normalized = full.replace(/\\/g, '/');
+      files.push({ id: normalized, name: rel.replace(/\\/g, '/'), path: normalized, content: fs.readFileSync(full, 'utf-8') });
     });
   } else if (MD_EXT.test(abs)) {
     const full = abs.replace(/\\/g, '/');
@@ -88,7 +102,7 @@ function createView(targetPath) {
   const data = { folderName: label, sourcePath: abs.replace(/\\/g, '/'), files };
 
   fs.writeFileSync(path.join(VIEWS_DIR, viewName + '.js'),
-    'window.__MDVIEW_DATA = ' + JSON.stringify(data) + ';', 'utf-8');
+    'window.__MDVIEW_DATA = ' + JSON.stringify(data).replace(/<\//g, '<\\/') + ';', 'utf-8');
 
   // Update views.json
   const views = readViews();
@@ -99,7 +113,7 @@ function createView(targetPath) {
 
   // Update last-view pointer
   fs.writeFileSync(path.join(MDVIEW_HOME, 'last-view.js'),
-    `window.__MDVIEW_LAST = "${viewName}";`, 'utf-8');
+    'window.__MDVIEW_LAST = ' + JSON.stringify(viewName).replace(/<\//g, '<\\/') + ';', 'utf-8');
 
   return { viewName, fileCount: files.length };
 }
@@ -266,7 +280,10 @@ function runServer() {
 
     // List views
     if (p === '/api/views' && req.method === 'GET') {
-      res.end(JSON.stringify(readViews()));
+      const views = readViews().filter(v => {
+        return fs.existsSync(path.join(VIEWS_DIR, v.viewName + '.js'));
+      });
+      res.end(JSON.stringify(views));
       return;
     }
 
@@ -285,7 +302,7 @@ function runServer() {
           const viewData = { folderName: label, sourcePath: 'browser-upload', files };
 
           fs.writeFileSync(path.join(VIEWS_DIR, viewName + '.js'),
-            'window.__MDVIEW_DATA = ' + JSON.stringify(viewData) + ';', 'utf-8');
+            'window.__MDVIEW_DATA = ' + JSON.stringify(viewData).replace(/<\//g, '<\\/') + ';', 'utf-8');
 
           const views = readViews();
           const entry = { viewName, folderName: label, sourcePath: 'browser-upload', fileCount: files.length, lastOpened: Date.now() };
@@ -293,7 +310,7 @@ function runServer() {
           writeViews(views);
 
           fs.writeFileSync(path.join(MDVIEW_HOME, 'last-view.js'),
-            `window.__MDVIEW_LAST = "${viewName}";`, 'utf-8');
+            'window.__MDVIEW_LAST = ' + JSON.stringify(viewName).replace(/<\//g, '<\\/') + ';', 'utf-8');
 
           res.end(JSON.stringify({ ok: true, viewName }));
         } catch(e) { res.writeHead(400); res.end('{"error":"invalid json"}'); }
@@ -319,7 +336,7 @@ function runServer() {
       // Update last-view pointer
       if (remaining.length > 0) {
         fs.writeFileSync(path.join(MDVIEW_HOME, 'last-view.js'),
-          `window.__MDVIEW_LAST = "${remaining[0].viewName}";`, 'utf-8');
+          'window.__MDVIEW_LAST = ' + JSON.stringify(remaining[0].viewName).replace(/<\//g, '<\\/') + ';', 'utf-8');
       } else {
         try { fs.unlinkSync(path.join(MDVIEW_HOME, 'last-view.js')); } catch(e) {}
       }
@@ -369,18 +386,20 @@ function ensureServer() {
 
 function stopServer() {
   return new Promise(resolve => {
-    const req = http.get(`http://127.0.0.1:${API_PORT}/api/ping`, () => {
+    let done = false;
+    const finish = (msg) => { if (done) return; done = true; console.log(msg); resolve(); };
+    const req = http.get(`http://127.0.0.1:${API_PORT}/api/ping`, (res) => {
+      res.resume();
       // Running — kill it
       try {
         const pid = fs.readFileSync(path.join(MDVIEW_HOME, 'server.pid'), 'utf-8').trim();
         process.kill(parseInt(pid));
       } catch(e) {}
       try { fs.unlinkSync(path.join(MDVIEW_HOME, 'server.pid')); } catch(e) {}
-      console.log('  Server stopped.');
-      resolve();
+      finish('  Server stopped.');
     });
-    req.on('error', () => { console.log('  Server is not running.'); resolve(); });
-    req.setTimeout(300, () => { req.destroy(); resolve(); });
+    req.on('error', () => { finish('  Server is not running.'); });
+    req.setTimeout(300, () => { req.destroy(); });
   });
 }
 
