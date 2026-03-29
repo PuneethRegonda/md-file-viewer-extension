@@ -71,6 +71,9 @@
   root.appendChild(content);
   document.body.appendChild(root);
 
+  // Intercept .md link clicks — render in-place instead of navigating
+  interceptMdLinks(content, root);
+
   // Listen for theme changes from popup
   if (chrome && chrome.storage && chrome.storage.onChanged) {
     chrome.storage.onChanged.addListener(function (changes) {
@@ -108,4 +111,67 @@
     div.appendChild(document.createTextNode(str));
     return div.innerHTML;
   }
+
+  function interceptMdLinks(container, viewerRoot) {
+    container.querySelectorAll('a[href]').forEach(function (link) {
+      var href = link.getAttribute('href');
+      if (!/\.(md|markdown|mdown)(\?.*)?$/i.test(href)) return;
+
+      link.addEventListener('click', function (e) {
+        e.preventDefault();
+
+        // Resolve relative URL against current page
+        var resolvedUrl = new URL(href, window.location.href).href;
+
+        // Fetch the linked .md file and render in-place
+        fetch(resolvedUrl)
+          .then(function (res) {
+            if (!res.ok) throw new Error('Not found');
+            return res.text();
+          })
+          .then(function (mdText) {
+            // Update the page title
+            var fileName = resolvedUrl.split('/').pop().split('?')[0];
+            document.title = fileName;
+
+            // Update browser URL without reload
+            history.pushState({ url: resolvedUrl }, fileName, resolvedUrl);
+
+            // Re-render content
+            var contentDiv = viewerRoot.querySelector('.md-content');
+            if (typeof marked !== 'undefined') {
+              contentDiv.innerHTML = marked.parse(mdText);
+            } else {
+              contentDiv.innerHTML = basicMarkdownRender(mdText);
+            }
+            window.scrollTo(0, 0);
+
+            // Re-attach link interception on new content
+            interceptMdLinks(contentDiv, viewerRoot);
+          })
+          .catch(function () {
+            // Can't fetch — navigate normally
+            window.location.href = resolvedUrl;
+          });
+      });
+    });
+  }
+
+  // Handle browser back/forward for in-place navigation
+  window.addEventListener('popstate', function (e) {
+    if (e.state && e.state.url) {
+      fetch(e.state.url)
+        .then(function (res) { return res.text(); })
+        .then(function (mdText) {
+          var contentDiv = root.querySelector('.md-content');
+          if (typeof marked !== 'undefined') {
+            contentDiv.innerHTML = marked.parse(mdText);
+          } else {
+            contentDiv.innerHTML = basicMarkdownRender(mdText);
+          }
+          window.scrollTo(0, 0);
+          interceptMdLinks(contentDiv, root);
+        });
+    }
+  });
 })();

@@ -622,6 +622,48 @@
     function renderContent(file) {
       contentEl.innerHTML = '<div class="md-body">' + marked.parse(file.content) + '</div>';
       contentEl.scrollTop = 0;
+      interceptMdLinks();
+    }
+
+    // ===== INTERCEPT .md LINK CLICKS =====
+    function interceptMdLinks() {
+      contentEl.querySelectorAll('a[href]').forEach(link => {
+        const href = link.getAttribute('href');
+        if (!/\.(md|markdown|mdown)(\?.*)?$/i.test(href)) return;
+
+        link.addEventListener('click', (e) => {
+          e.preventDefault();
+
+          // Extract filename from href (could be relative path like ./guide.md or ../other.md)
+          const linkName = href.split('/').pop().split('?')[0];
+
+          // Check if file is already loaded in FILES
+          const match = FILES.find(f => f.name === linkName);
+          if (match) {
+            openFile(match);
+            return;
+          }
+
+          // Try to fetch the file (works for file:// if same folder, or http)
+          const resolvedUrl = new URL(href, window.location.href).href;
+          fetch(resolvedUrl)
+            .then(res => {
+              if (!res.ok) throw new Error('Not found');
+              return res.text();
+            })
+            .then(content => {
+              const newFile = { name: linkName, content: content };
+              FILES.push(newFile);
+              fileCountEl.textContent = FILES.length;
+              renderFileList(searchBox.value);
+              openFile(newFile);
+            })
+            .catch(() => {
+              // Can't fetch — fall back to opening in new tab
+              window.open(resolvedUrl, '_blank');
+            });
+        });
+      });
     }
 
     // ===== KEYBOARD =====
