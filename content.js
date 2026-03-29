@@ -29,7 +29,8 @@
   root.className = 'md-viewer-root';
 
   // Load saved theme or default to light
-  const savedTheme = sessionStorage.getItem('md-viewer-theme') || 'light';
+  const browserPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const savedTheme = sessionStorage.getItem('md-viewer-theme') || (browserPrefersDark ? 'dark' : 'light');
   root.setAttribute('data-theme', savedTheme);
 
   // Create theme toggle button

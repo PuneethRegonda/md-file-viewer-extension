@@ -184,19 +184,27 @@ if [ -d "$TARGET" ]; then
   echo "Found ${#MD_FILES[@]} markdown file(s)"
 
   FOLDER_NAME="$(basename "$TARGET")"
-  MARKED_PATH="$(to_file_url "$EXT_DIR/lib/marked.min.js")"
-  TEMP_DIR="$(get_temp_dir)"
-  TEMP_HTML="$TEMP_DIR/mdview_${FOLDER_NAME}_$$.html"
 
-  # Let Python handle all file reading, JSON building, and template injection
+  # Persistent mdview home
+  MDVIEW_HOME="$HOME/.mdview"
+  mkdir -p "$MDVIEW_HOME/views"
+
+  # Copy/update app.html and marked.min.js to ~/.mdview/
+  cp "$EXT_DIR/folder-viewer.html" "$MDVIEW_HOME/app.html"
+  cp "$EXT_DIR/lib/marked.min.js" "$MDVIEW_HOME/marked.min.js"
+
+  # Deterministic view name based on folder path
+  HASH=$("$PYTHON" -c "import hashlib,sys; print(hashlib.md5(sys.argv[1].encode()).hexdigest()[:8])" "$TARGET")
+  VIEW_NAME="${FOLDER_NAME}-${HASH}"
+  VIEW_JS="$MDVIEW_HOME/views/${VIEW_NAME}.js"
+
+  # Generate JS data file (script-loadable, works on file://)
   "$PYTHON" -c "
 import json, os, sys, glob
 
 target = sys.argv[1]
-ext_dir = sys.argv[2]
-output = sys.argv[3]
-folder_name = sys.argv[4]
-marked_path = sys.argv[5]
+output = sys.argv[2]
+folder_name = sys.argv[3]
 
 patterns = ['*.md', '*.markdown', '*.mdown']
 files = []
@@ -208,27 +216,28 @@ for p in patterns:
             with open(f, 'r', encoding='utf-8', errors='replace') as fh:
                 files.append({'id': fpath, 'name': name, 'path': fpath, 'content': fh.read()})
 
-with open(os.path.join(ext_dir, 'folder-viewer.html'), 'r', encoding='utf-8') as f:
-    html = f.read()
-
-html = html.replace('{{FOLDER_NAME}}', folder_name)
-html = html.replace('{{FILES_JSON}}', json.dumps(files))
-html = html.replace('{{MARKED_PATH}}', marked_path)
+data = {
+    'folderName': folder_name,
+    'sourcePath': os.path.abspath(target).replace('\\\\', '/'),
+    'files': files
+}
 
 with open(output, 'w', encoding='utf-8') as f:
-    f.write(html)
+    f.write('window.__MDVIEW_DATA = ')
+    json.dump(data, f)
+    f.write(';')
 
-print(f'Generated: {output}')
-" "$TARGET" "$EXT_DIR" "$TEMP_HTML" "$FOLDER_NAME" "$MARKED_PATH"
+print(f'View data: {output} ({len(files)} files)')
+" "$TARGET" "$VIEW_JS" "$FOLDER_NAME"
 
-  if [ ! -f "$TEMP_HTML" ]; then
-    echo "Error: Failed to generate viewer HTML"
+  if [ ! -f "$VIEW_JS" ]; then
+    echo "Error: Failed to generate view data"
     exit 1
   fi
 
-  FILE_URL="$(to_file_url "$TEMP_HTML")"
-  echo "Opening: $FILE_URL"
-  open_in_browser "$FILE_URL"
+  APP_URL="$(to_file_url "$MDVIEW_HOME/app.html")?view=${VIEW_NAME}"
+  echo "Opening: $APP_URL"
+  open_in_browser "$APP_URL"
   exit 0
 fi
 

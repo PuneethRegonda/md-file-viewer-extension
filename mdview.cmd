@@ -64,54 +64,55 @@ goto :eof
 :folder_mode
 echo Scanning folder: %TARGET%
 
-set "TEMP_HTML=%TEMP%\mdview_%RANDOM%.html"
+:: Persistent mdview home
+set "MDVIEW_HOME=%USERPROFILE%\.mdview"
+if not exist "%MDVIEW_HOME%\views" mkdir "%MDVIEW_HOME%\views"
 
-%PYTHON% -c "
-import json, os, sys, glob
+:: Copy app files
+copy /y "%EXT_DIR%\folder-viewer.html" "%MDVIEW_HOME%\app.html" >nul
+copy /y "%EXT_DIR%\lib\marked.min.js" "%MDVIEW_HOME%\marked.min.js" >nul
 
+:: Get view name from Python (it prints VIEW_NAME as last line)
+for /f "delims=" %%V in ('%PYTHON% -c "
+import json, os, sys, glob, hashlib
 target = sys.argv[1]
-ext_dir = sys.argv[2]
-output = sys.argv[3]
-
+mdview_home = sys.argv[2]
+folder_name = os.path.basename(target)
+hash8 = hashlib.md5(os.path.abspath(target).encode()).hexdigest()[:8]
+view_name = folder_name + chr(45) + hash8
+output = os.path.join(mdview_home, 'views', view_name + '.js')
 patterns = ['*.md', '*.markdown', '*.mdown']
 files = []
 for p in patterns:
     for f in sorted(glob.glob(os.path.join(target, p))):
         name = os.path.basename(f)
-        fpath = os.path.abspath(f).replace('\\\\', '/')
+        fpath = os.path.abspath(f).replace(chr(92), '/')
         if not any(x['id'] == fpath for x in files):
             with open(f, 'r', encoding='utf-8', errors='replace') as fh:
                 files.append({'id': fpath, 'name': name, 'path': fpath, 'content': fh.read()})
-
 if not files:
-    print('No markdown files found.')
-    sys.exit(1)
-
-print(f'Found {len(files)} markdown file(s)')
-
-folder_name = os.path.basename(target)
-marked_path = 'file:///' + os.path.join(ext_dir, 'lib', 'marked.min.js').replace('\\', '/')
-
-with open(os.path.join(ext_dir, 'folder-viewer.html'), 'r', encoding='utf-8') as f:
-    html = f.read()
-
-html = html.replace('{{FOLDER_NAME}}', folder_name)
-html = html.replace('{{FILES_JSON}}', json.dumps(files))
-html = html.replace('{{MARKED_PATH}}', marked_path)
-
+    print('NO_FILES')
+    sys.exit(0)
+data = {'folderName': folder_name, 'sourcePath': os.path.abspath(target).replace(chr(92), '/'), 'files': files}
 with open(output, 'w', encoding='utf-8') as f:
-    f.write(html)
+    f.write('window.__MDVIEW_DATA = ')
+    json.dump(data, f)
+    f.write(';')
+print(view_name)
+" "%TARGET%" "%MDVIEW_HOME%"') do set "VIEW_NAME=%%V"
 
-print(f'Generated: {output}')
-" "%TARGET%" "%EXT_DIR%" "%TEMP_HTML%"
-
-if not exist "%TEMP_HTML%" (
-    echo Error: Failed to generate viewer HTML
+if "%VIEW_NAME%"=="NO_FILES" (
+    echo No markdown files found.
     exit /b 1
 )
 
-echo Opening folder viewer...
-call :open_browser "file:///%TEMP_HTML:\=/%"
+if "%VIEW_NAME%"=="" (
+    echo Error: Failed to generate view data
+    exit /b 1
+)
+
+echo Opening: %VIEW_NAME%
+call :open_browser "file:///%MDVIEW_HOME:\=/%/app.html?view=%VIEW_NAME%"
 goto :eof
 
 :: ===== BROWSER LAUNCHER =====

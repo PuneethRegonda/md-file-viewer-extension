@@ -1,10 +1,18 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{FOLDER_NAME}} — MD Viewer</title>
-  <script src="{{MARKED_PATH}}"></script>
+  <title>MDView</title>
+  <script>
+    // Apply theme BEFORE render to prevent flash
+    (function() {
+      var t = localStorage.getItem('mdview-theme');
+      if (!t) t = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+  <script src="./marked.min.js"></script>
   <style>
     *, *::before, *::after {
       margin: 0; padding: 0; box-sizing: border-box;
@@ -118,32 +126,221 @@
       overflow: hidden;
     }
 
-    .sidebar-header {
-      padding: 16px;
+    /* ===== Brand Header ===== */
+    .brand-header {
+      padding: 12px 16px;
       border-bottom: 1px solid var(--border);
-    }
-
-    .sidebar-title {
       display: flex;
       align-items: center;
       gap: 8px;
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--text);
-      margin-bottom: 12px;
     }
 
-    .sidebar-title svg { flex-shrink: 0; }
+    .brand-logo {
+      width: 24px; height: 24px;
+      border-radius: 6px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 12px; font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .brand-name {
+      font-size: 14px; font-weight: 700; color: var(--text);
+    }
+
+    .brand-links {
+      margin-left: auto;
+      display: flex; gap: 6px; align-items: center;
+    }
+
+    .brand-link {
+      display: flex; align-items: center; gap: 4px;
+      padding: 3px 8px; border-radius: 6px;
+      border: 1px solid var(--border);
+      font-size: 11px; color: var(--text-secondary);
+      text-decoration: none; cursor: pointer;
+      background: transparent;
+      font-family: inherit;
+    }
+
+    .brand-link:hover { background: var(--bg-hover); color: var(--text); }
+    .brand-link svg { flex-shrink: 0; }
+    .brand-link.star svg { color: #e3b341; fill: #e3b341; }
+
+    /* ===== View Drawer (inline panel beside sidebar) ===== */
+    .view-drawer-btn {
+      display: flex; align-items: center; justify-content: center;
+      width: 28px; height: 28px;
+      border-radius: 6px; border: 1px solid var(--border);
+      background: transparent; color: var(--text-secondary);
+      cursor: pointer; flex-shrink: 0;
+    }
+
+    .view-drawer-btn:hover { background: var(--bg-hover); color: var(--text); }
+    .view-drawer-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    .view-drawer {
+      width: 0; min-width: 0;
+      background: var(--sidebar-bg);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      height: 100vh; position: sticky; top: 0;
+      overflow: hidden;
+      transition: width 0.2s ease, min-width 0.2s ease;
+    }
+
+    .view-drawer.open { width: 260px; min-width: 260px; }
+
+    .view-drawer-header {
+      display: flex; align-items: center; gap: 8px;
+      padding: 14px 16px; border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    .view-drawer-header-text {
+      font-size: 13px; font-weight: 600; color: var(--text); flex: 1;
+    }
+
+    .view-drawer-close {
+      border: none; background: none; color: var(--text-secondary);
+      cursor: pointer; font-size: 18px; padding: 0 4px; border-radius: 4px;
+    }
+
+    .view-drawer-close:hover { background: var(--bg-hover); color: var(--text); }
+
+    .view-drawer-list {
+      flex: 1; overflow-y: auto; padding: 8px;
+      list-style: none; margin: 0;
+    }
+
+    .view-drawer-list::-webkit-scrollbar { width: 5px; }
+    .view-drawer-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    .view-entry {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: 8px;
+      cursor: pointer; margin-bottom: 2px;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+
+    .view-entry:hover { background: var(--bg-hover); border-color: var(--border); }
+
+    .view-entry.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .view-entry.active .view-entry-meta { color: rgba(255,255,255,0.7); }
+
+    .view-entry-icon {
+      width: 32px; height: 32px; border-radius: 8px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 11px; font-weight: 700; flex-shrink: 0;
+    }
+
+    .view-entry-info { flex: 1; min-width: 0; }
+
+    .view-entry-name {
+      font-size: 13px; font-weight: 600;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+
+    .view-entry-meta { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+
+    .view-entry-delete {
+      opacity: 0; border: none; background: none;
+      color: var(--text-secondary); cursor: pointer;
+      padding: 4px; border-radius: 4px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    .view-entry:hover .view-entry-delete { opacity: 0.5; }
+    .view-entry.active .view-entry-delete { color: rgba(255,255,255,0.6); }
+    .view-entry-delete:hover { opacity: 1 !important; color: #e5534b; }
+
+    .view-drawer-empty {
+      padding: 24px 16px; text-align: center;
+      color: var(--text-secondary); font-size: 13px; opacity: 0.6;
+    }
+
+    /* ===== Sidebar Footer ===== */
+    .sidebar-footer {
+      padding: 10px 16px; border-top: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+    }
+
+    .sidebar-footer a {
+      display: flex; align-items: center; gap: 4px;
+      font-size: 11px; color: var(--text-secondary);
+      text-decoration: none; padding: 4px 8px;
+      border-radius: 6px; border: 1px solid var(--border);
+    }
+
+    .sidebar-footer a:hover { background: var(--bg-hover); color: var(--text); }
+    .sidebar-footer a svg { flex-shrink: 0; }
+
+    .sidebar-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* ===== View Name ===== */
+    .view-name {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .view-name-text {
+      font-size: 14px; font-weight: 600; color: var(--text);
+      cursor: pointer; border-bottom: 1px dashed transparent;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+
+    .view-name-text:hover { border-bottom-color: var(--text-secondary); }
+
+    .view-name-input {
+      font-size: 14px; font-weight: 600; color: var(--text);
+      background: var(--bg); border: 1px solid var(--accent);
+      border-radius: 4px; padding: 1px 6px; outline: none;
+      font-family: inherit; flex: 1; min-width: 0;
+    }
 
     .file-count {
-      font-size: 12px;
-      font-weight: 500;
-      background: var(--counter-bg);
-      color: var(--counter-text);
-      padding: 0 8px;
-      border-radius: 10px;
-      margin-left: auto;
+      font-size: 11px; font-weight: 500;
+      background: var(--counter-bg); color: var(--counter-text);
+      padding: 0 7px; border-radius: 8px; flex-shrink: 0;
     }
+
+
+    .folder-header-name-input {
+      background: var(--bg);
+      border: 1px solid var(--accent);
+      border-radius: 4px;
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 600;
+      font-family: inherit;
+      padding: 1px 4px;
+      outline: none;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .folder-rename {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      opacity: 0;
+      flex-shrink: 0;
+    }
+
+    .folder-header:hover .folder-rename { opacity: 0.5; }
+    .folder-rename:hover { opacity: 1 !important; background: var(--bg-hover); }
 
     .search-box {
       width: 100%;
@@ -173,11 +370,93 @@
       border-radius: 3px;
     }
 
+    /* ===== Folder Group ===== */
+    .folder-group {
+      margin-bottom: 2px;
+    }
+
+    .folder-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      border-radius: 6px;
+      user-select: none;
+    }
+
+    .folder-header:hover {
+      background: var(--bg-hover);
+      color: var(--text);
+    }
+
+    .folder-chevron {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+      transition: transform 0.15s ease;
+      opacity: 0.5;
+    }
+
+    .folder-group.collapsed .folder-chevron {
+      transform: rotate(-90deg);
+    }
+
+    .folder-header-icon { flex-shrink: 0; opacity: 0.7; }
+
+    .folder-header-name {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .folder-file-count {
+      font-size: 11px;
+      font-weight: 500;
+      background: var(--counter-bg);
+      color: var(--counter-text);
+      padding: 0 6px;
+      border-radius: 8px;
+      margin-left: auto;
+    }
+
+    .folder-action {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      opacity: 0;
+      flex-shrink: 0;
+    }
+
+    .folder-header:hover .folder-action { opacity: 0.5; }
+    .folder-action:hover { opacity: 1 !important; background: var(--bg-hover); }
+    .folder-action.delete:hover { color: #e5534b; }
+
+    .folder-files {
+      overflow: hidden;
+    }
+
+    .folder-group.collapsed .folder-files {
+      display: none;
+    }
+
+    /* ===== File Item ===== */
     .file-item {
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 8px 12px;
+      padding: 6px 12px 6px 30px;
       border-radius: 6px;
       cursor: pointer;
       font-size: 13px;
@@ -223,6 +502,71 @@
 
     .file-item:hover .file-remove { opacity: 0.5; }
     .file-remove:hover { opacity: 1 !important; background: var(--bg-hover); color: #e5534b; }
+
+    /* ===== Context Menu ===== */
+    .context-menu {
+      display: none;
+      position: fixed;
+      z-index: 100001;
+      min-width: 200px;
+      padding: 4px 0;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+      font-size: 13px;
+    }
+
+    .context-menu.visible { display: block; }
+
+    .context-menu-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 14px;
+      cursor: pointer;
+      color: var(--text);
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+      font-size: 13px;
+      font-family: inherit;
+    }
+
+    .context-menu-item:hover {
+      background: var(--bg-hover);
+    }
+
+    .context-menu-item svg { opacity: 0.6; flex-shrink: 0; }
+
+    .context-menu-divider {
+      height: 1px;
+      margin: 4px 0;
+      background: var(--border);
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      padding: 8px 20px;
+      border-radius: 8px;
+      background: var(--text);
+      color: var(--bg);
+      font-size: 13px;
+      font-weight: 500;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s, transform 0.2s;
+      z-index: 100002;
+    }
+
+    .toast.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
 
     /* ===== Main Content ===== */
     .main {
@@ -556,17 +900,45 @@
 </head>
 <body>
   <div class="app">
+    <!-- View Drawer (beside sidebar) -->
+    <div class="view-drawer" id="viewDrawer">
+      <div class="view-drawer-header">
+        <div class="brand-logo" style="width:20px;height:20px;font-size:9px;">MD</div>
+        <span class="view-drawer-header-text">Recent Views</span>
+        <button class="view-drawer-close" id="viewDrawerClose">&times;</button>
+      </div>
+      <ul class="view-drawer-list" id="viewDrawerList"></ul>
+    </div>
+
     <!-- Sidebar -->
     <aside class="sidebar">
+      <div class="brand-header">
+        <button class="view-drawer-btn" id="viewDrawerBtn" title="Recent views">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1 2.75A.75.75 0 0 1 1.75 2h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 2.75Zm0 5A.75.75 0 0 1 1.75 7h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 7.75ZM1.75 12h12.5a.75.75 0 0 1 0 1.5H1.75a.75.75 0 0 1 0-1.5Z"/></svg>
+        </button>
+        <div class="brand-logo">MD</div>
+        <span class="brand-name">MDView</span>
+        <div class="brand-links">
+          <a class="brand-link star" href="https://github.com/PuneethRegonda/md-file-viewer-extension" target="_blank" title="Star on GitHub">
+            <svg width="12" height="12" viewBox="0 0 16 16"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>
+            Star
+          </a>
+        </div>
+      </div>
       <div class="sidebar-header">
-        <div class="sidebar-title">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="var(--folder-icon)"><path d="M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75Z"/></svg>
-          <span id="folderName">{{FOLDER_NAME}}</span>
+        <div class="view-name">
+          <span class="view-name-text" id="viewName" title="Click to rename this view">Loading...</span>
           <span class="file-count" id="fileCount">0</span>
         </div>
         <input type="text" class="search-box" id="searchBox" placeholder="Filter files..." autocomplete="off">
       </div>
       <div class="file-list" id="fileList"></div>
+      <div class="sidebar-footer">
+        <a href="https://buymeacoffee.com/puneethregonda" target="_blank" title="Buy me a coffee">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M3 2.75C3 1.784 3.784 1 4.75 1h6.5c.966 0 1.75.784 1.75 1.75v1.5a.75.75 0 0 1-.75.75h-8.5A.75.75 0 0 1 3 4.25Zm1.75-.25a.25.25 0 0 0-.25.25v.75h7v-.75a.25.25 0 0 0-.25-.25ZM2.5 6a.75.75 0 0 1 .75-.75h9.5a.75.75 0 0 1 .75.75v5.25a3.25 3.25 0 0 1-3.25 3.25h-4.5A3.25 3.25 0 0 1 2.5 11.25Zm1.5.75v4.5c0 .966.784 1.75 1.75 1.75h4.5c.966 0 1.75-.784 1.75-1.75v-4.5Z"/></svg>
+          Buy me a coffee
+        </a>
+      </div>
     </aside>
 
     <!-- Main -->
@@ -583,6 +955,61 @@
     <!-- Theme Toggle -->
     <button class="theme-toggle" id="themeToggle" title="Toggle dark/light mode"></button>
 
+    <!-- Hidden file picker -->
+    <input type="file" id="filePicker" multiple accept=".md,.markdown,.mdown" style="display:none">
+
+
+    <!-- Folder Context Menu -->
+    <div class="context-menu" id="folderCtxMenu">
+      <button class="context-menu-item" id="fctxAddFiles">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2Z"/></svg>
+        Add files...
+      </button>
+      <button class="context-menu-item" id="fctxRename">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm.176 4.823L9.75 4.81l-6.286 6.287a.253.253 0 0 0-.064.108l-.558 1.953 1.953-.558a.253.253 0 0 0 .108-.064Zm1.238-3.763a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354Z"/></svg>
+        Rename folder
+      </button>
+      <button class="context-menu-item" id="fctxCopyPath">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"/><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"/></svg>
+        Copy folder path
+      </button>
+      <div class="context-menu-divider"></div>
+      <button class="context-menu-item" id="fctxRefresh">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 2.5a5.487 5.487 0 0 0-4.131 1.869l1.204 1.204A.25.25 0 0 1 4.896 6H1.25A.25.25 0 0 1 1 5.75V2.104a.25.25 0 0 1 .427-.177l1.38 1.38A7.002 7.002 0 0 1 14.95 7.16a.75.75 0 0 1-1.49.178A5.5 5.5 0 0 0 8 2.5ZM1.705 8.005a.75.75 0 0 1 .834.656 5.5 5.5 0 0 0 9.592 2.97l-1.204-1.204a.25.25 0 0 1 .177-.427h3.646a.25.25 0 0 1 .25.25v3.646a.25.25 0 0 1-.427.177l-1.38-1.38A7.002 7.002 0 0 1 1.05 8.84a.75.75 0 0 1 .656-.834Z"/></svg>
+        Refresh folder
+      </button>
+      <div class="context-menu-divider"></div>
+      <button class="context-menu-item" id="fctxDelete" style="color: #e5534b;">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.15l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/></svg>
+        Delete folder
+      </button>
+    </div>
+
+    <!-- File Context Menu -->
+    <div class="context-menu" id="contextMenu">
+      <button class="context-menu-item" id="ctxCopyPath">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"/><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"/></svg>
+        Copy file path
+      </button>
+      <button class="context-menu-item" id="ctxCopyName">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"/></svg>
+        Copy file name
+      </button>
+      <div class="context-menu-divider"></div>
+      <button class="context-menu-item" id="ctxCopyFolder">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75Z"/></svg>
+        Copy folder path
+      </button>
+      <div class="context-menu-divider"></div>
+      <button class="context-menu-item" id="ctxRemove" style="color: #e5534b;">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.15l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/></svg>
+        Remove from view
+      </button>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
     <!-- Link Dialog -->
     <div class="link-dialog-overlay" id="linkDialog">
       <div class="link-dialog">
@@ -592,6 +1019,18 @@
           <button class="link-dialog-btn" id="linkDialogCancel">Cancel</button>
           <button class="link-dialog-btn" id="linkDialogNewView">New View</button>
           <button class="link-dialog-btn primary" id="linkDialogHere">Open Here</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Confirm Dialog -->
+    <div class="link-dialog-overlay" id="confirmDialog">
+      <div class="link-dialog">
+        <h3 id="confirmTitle">Delete view</h3>
+        <p id="confirmMessage"></p>
+        <div class="link-dialog-buttons">
+          <button class="link-dialog-btn" id="confirmCancel">Cancel</button>
+          <button class="link-dialog-btn" id="confirmOk" style="background:#e5534b;color:#fff;border-color:#e5534b;">Delete</button>
         </div>
       </div>
     </div>
@@ -607,13 +1046,44 @@
   </div>
 
   <script>
-    // ===== DATA (injected by CLI) =====
-    const _ORIGINAL_FILES = {{FILES_JSON}};
-    const FOLDER_NAME = '{{FOLDER_NAME}}';
+    // ===== DYNAMIC DATA LOADER =====
+    // Read ?view= param to load JSON, or fall back to baked-in data
+    let _ORIGINAL_FILES = [];
+    let FOLDER_NAME = 'MDView';
+    let VIEW_NAME = '';
+
+    (function loadAndInit() {
+      const params = new URLSearchParams(window.location.search);
+      VIEW_NAME = params.get('view') || '';
+
+      if (VIEW_NAME) {
+        // Load view data via <script> tag (works on file:// unlike fetch)
+        const script = document.createElement('script');
+        script.src = './views/' + VIEW_NAME + '.js';
+        script.onload = function () {
+          if (window.__MDVIEW_DATA) {
+            _ORIGINAL_FILES = window.__MDVIEW_DATA.files || [];
+            FOLDER_NAME = window.__MDVIEW_DATA.folderName || VIEW_NAME;
+          }
+          document.title = FOLDER_NAME + ' \u2014 MDView';
+          var el = document.getElementById('viewName');
+          if (el) el.textContent = FOLDER_NAME;
+          initApp();
+        };
+        script.onerror = function () {
+          document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:system-ui;color:#888;font-size:16px;">View not found: <code style="margin:0 6px;padding:2px 8px;background:#f0f0f0;border-radius:4px;">' + VIEW_NAME + '</code><br><br>Run <code style="padding:2px 8px;background:#f0f0f0;border-radius:4px;">mdview &lt;folder&gt;</code> to create a view.</div>';
+        };
+        document.head.appendChild(script);
+      } else {
+        document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:system-ui;color:#888;font-size:16px;">No view specified. Run <code style="margin:0 6px;padding:2px 8px;background:#f0f0f0;border-radius:4px;">mdview &lt;folder&gt;</code> to open a view.</div>';
+      }
+    })();
+
+    function initApp() {
 
     // ===== SESSION PERSISTENCE =====
     // Key unique to this viewer instance (based on folder name + file count)
-    const SESSION_KEY = 'mdview_' + FOLDER_NAME + '_state';
+    const SESSION_KEY = 'mdview_' + (VIEW_NAME || FOLDER_NAME) + '_state';
 
     // ===== ENSURE IDs =====
     let _fileIdCounter = Date.now();
@@ -658,7 +1128,7 @@
       try {
         // Save files (without content for size, but we need content for rendering)
         sessionStorage.setItem(SESSION_KEY, JSON.stringify({
-          files: FILES.map(f => ({ id: f.id, name: f.name, path: f.path, content: f.content })),
+          files: FILES.map(f => ({ id: f.id, name: f.name, path: f.path, folder: f.folder, content: f.content })),
           activeTab: activeTab,
           openTabIds: openTabs.map(t => t.id)
         }));
@@ -682,19 +1152,41 @@
     const FILES = loadFilesFromSession();
     const openTabs = []; // { id, name, path, content }
     let activeTab = null; // file.id
+    const collapsedFolders = new Set(); // folder paths that are collapsed
+
+    // Helper: get folder group for a file
+    function getFileFolder(file) {
+      if (file.folder) return file.folder;
+      // Derive from path
+      if (!file.path) return 'Ungrouped';
+      const p = file.path.replace(/\\/g, '/');
+      const lastSlash = p.lastIndexOf('/');
+      if (lastSlash <= 0) return 'Ungrouped';
+      let folder = p.substring(0, lastSlash);
+      if (folder.startsWith('/')) folder = folder.substring(1);
+      return folder || 'Ungrouped';
+    }
+
+    // Helper: short folder name for display
+    function shortFolderName(folderPath) {
+      const parts = folderPath.replace(/\\/g, '/').split('/');
+      return parts[parts.length - 1] || folderPath;
+    }
 
     // ===== THEME =====
     const root = document.documentElement;
     const themeBtn = document.getElementById('themeToggle');
-    let theme = sessionStorage.getItem('md-viewer-theme') || 'light';
-    applyTheme(theme);
+    let theme = document.documentElement.getAttribute('data-theme') || 'light';
 
     function applyTheme(t) {
       theme = t;
       root.setAttribute('data-theme', t);
       themeBtn.textContent = t === 'light' ? '\u{1F319}' : '\u2600\uFE0F';
-      sessionStorage.setItem('md-viewer-theme', t);
+      localStorage.setItem('mdview-theme', t);
     }
+
+    // Just update the button icon (theme already applied in <head>)
+    themeBtn.textContent = theme === 'light' ? '\u{1F319}' : '\u2600\uFE0F';
 
     themeBtn.addEventListener('click', () => applyTheme(theme === 'light' ? 'dark' : 'light'));
 
@@ -710,28 +1202,157 @@
 
     function renderFileList(filter) {
       fileListEl.innerHTML = '';
+      fileCountEl.textContent = FILES.length;
       const q = (filter || '').toLowerCase();
       const filtered = FILES.filter(f => f.name.toLowerCase().includes(q));
 
+      // Group by folder
+      const folders = new Map();
       filtered.forEach(file => {
-        const item = document.createElement('div');
-        item.className = 'file-item' + (activeTab === file.id ? ' active' : '');
-        item.title = file.path || file.name;
-        item.innerHTML = `
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"/>
-          </svg>
-          <span class="file-name">${displayName(file)}</span>
-          <button class="file-remove" title="Remove from view">&times;</button>
-        `;
-        item.querySelector('.file-name').addEventListener('click', () => openFile(file));
-        item.querySelector('svg').addEventListener('click', () => openFile(file));
-        item.querySelector('.file-remove').addEventListener('click', (e) => {
-          e.stopPropagation();
-          removeFile(file.id);
-        });
-        fileListEl.appendChild(item);
+        const folderName = getFileFolder(file);
+        if (!folders.has(folderName)) folders.set(folderName, []);
+        folders.get(folderName).push(file);
       });
+
+      folders.forEach((files, folderName) => {
+        const group = document.createElement('div');
+        group.className = 'folder-group' + (collapsedFolders.has(folderName) ? ' collapsed' : '');
+
+        const isOriginalFolder = _ORIGINAL_FILES.some(f => getFileFolder(f) === folderName);
+
+        // Folder header
+        const header = document.createElement('div');
+        header.className = 'folder-header';
+        header.title = folderName;
+        header.innerHTML = `
+          <svg class="folder-chevron" width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M4.427 7.427l3.396 3.396a.25.25 0 0 0 .354 0l3.396-3.396A.25.25 0 0 0 11.396 7H4.604a.25.25 0 0 0-.177.427z"/></svg>
+          <svg class="folder-header-icon" width="14" height="14" viewBox="0 0 16 16" fill="var(--folder-icon)"><path d="M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75Z"/></svg>
+          <span class="folder-header-name">${shortFolderName(folderName)}</span>
+          <span class="folder-file-count">${files.length}</span>
+          <button class="folder-action delete" title="Delete folder"><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.15l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/></svg></button>
+        `;
+
+        // Toggle collapse (ignore clicks on action buttons)
+        header.addEventListener('click', (e) => {
+          if (e.target.closest('.folder-action')) return;
+          if (collapsedFolders.has(folderName)) collapsedFolders.delete(folderName);
+          else collapsedFolders.add(folderName);
+          group.classList.toggle('collapsed');
+        });
+
+        // Delete button
+        header.querySelector('.folder-action.delete').addEventListener('click', (e) => {
+          e.stopPropagation();
+          deleteFolder(folderName);
+        });
+
+        // Right-click on folder header
+        header.addEventListener('contextmenu', (e) => showFolderCtxMenu(e, folderName, header));
+
+        group.appendChild(header);
+
+        // File items
+        const filesContainer = document.createElement('div');
+        filesContainer.className = 'folder-files';
+
+        files.forEach(file => {
+          const item = document.createElement('div');
+          item.className = 'file-item' + (activeTab === file.id ? ' active' : '');
+          item.title = file.path || file.name;
+          item.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"/>
+            </svg>
+            <span class="file-name">${file.name}</span>
+            <button class="file-remove" title="Remove from view">&times;</button>
+          `;
+          item.querySelector('.file-name').addEventListener('click', () => openFile(file));
+          item.querySelector('svg').addEventListener('click', () => openFile(file));
+          item.querySelector('.file-remove').addEventListener('click', (e) => {
+            e.stopPropagation();
+            removeFile(file.id);
+          });
+          item.addEventListener('contextmenu', (e) => showCtxMenu(e, file));
+          filesContainer.appendChild(item);
+        });
+
+        group.appendChild(filesContainer);
+        fileListEl.appendChild(group);
+      });
+    }
+
+    // ===== FOLDER RENAME =====
+    function startFolderRename(oldName, headerEl) {
+      const nameSpan = headerEl.querySelector('.folder-header-name');
+      const currentName = nameSpan.textContent;
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'folder-header-name-input';
+      input.value = currentName;
+      nameSpan.replaceWith(input);
+      input.focus();
+      input.select();
+
+      function commit() {
+        const newName = input.value.trim() || currentName;
+        // Rename: update folder on all files in this group
+        FILES.forEach(f => {
+          if (getFileFolder(f) === oldName) f.folder = newName;
+        });
+        // Update collapsed state
+        if (collapsedFolders.has(oldName)) {
+          collapsedFolders.delete(oldName);
+          collapsedFolders.add(newName);
+        }
+        renderFileList(searchBox.value);
+        saveFilesToSession();
+        showToast('Folder renamed');
+      }
+
+      input.addEventListener('blur', commit);
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+        if (e.key === 'Escape') { input.value = currentName; input.blur(); }
+      });
+    }
+
+
+    // ===== REFETCH FOLDER =====
+    function refetchFolder(folderName) {
+      const originals = _ORIGINAL_FILES
+        .map(f => ensureId({...f}))
+        .filter(f => getFileFolder(f) === folderName);
+
+      // Remove current files from this folder
+      for (let i = FILES.length - 1; i >= 0; i--) {
+        if (getFileFolder(FILES[i]) === folderName) {
+          const removedId = FILES[i].id;
+          FILES.splice(i, 1);
+          const tabIdx = openTabs.findIndex(t => t.id === removedId);
+          if (tabIdx !== -1) openTabs.splice(tabIdx, 1);
+          if (activeTab === removedId) activeTab = null;
+        }
+      }
+
+      // Re-add originals
+      originals.forEach(f => {
+        if (!FILES.find(x => x.id === f.id)) FILES.push(f);
+      });
+
+      fileCountEl.textContent = FILES.length;
+
+      if (!activeTab && openTabs.length > 0) {
+        activeTab = openTabs[0].id;
+        renderContent(openTabs[0]);
+      } else if (!activeTab && FILES.length > 0) {
+        openFile(FILES[0]);
+        return;
+      }
+
+      renderTabs();
+      renderFileList(searchBox.value);
+      saveFilesToSession();
+      showToast('Folder refreshed');
     }
 
     searchBox.addEventListener('input', () => renderFileList(searchBox.value));
@@ -830,6 +1451,7 @@
           renderFileList(searchBox.value);
         });
         tab.querySelector('.tab-close').addEventListener('click', (e) => closeTab(file.id, e));
+        tab.addEventListener('contextmenu', (e) => showCtxMenu(e, file));
         tabBar.appendChild(tab);
       });
     }
@@ -990,11 +1612,8 @@
       dragCounter = 0;
       dropOverlay.classList.remove('visible');
 
-      const droppedFiles = Array.from(e.dataTransfer.files);
-      const mdFiles = droppedFiles.filter(f =>
-        /\.(md|markdown|mdown)$/i.test(f.name)
-      );
-
+      const files = Array.from(e.dataTransfer.files);
+      const mdFiles = files.filter(f => /\.(md|markdown|mdown)$/i.test(f.name));
       if (mdFiles.length === 0) return;
 
       let loaded = 0;
@@ -1002,18 +1621,15 @@
         const reader = new FileReader();
         reader.onload = function (ev) {
           const content = ev.target.result;
-          // Use webkitRelativePath for real path, fallback to name
-          const filePath = file.webkitRelativePath || file.name;
 
-          // Check if this exact content+name already exists (same file dragged again)
+          // Same content already loaded? Just switch to it
           const duplicate = FILES.find(f => f.name === file.name && f.content === content);
           if (duplicate) {
-            // Same file — just open existing tab
             openFile(duplicate);
           } else {
-            // New file (even if same name) — always add with unique id
-            const newFile = { name: file.name, path: filePath, content: content };
-            ensureId(newFile); // generates unique id with timestamp
+            // Add as new file
+            const newFile = { name: file.name, folder: 'Ungrouped', content: content };
+            ensureId(newFile);
             FILES.push(newFile);
             fileCountEl.textContent = FILES.length;
             openFile(newFile);
@@ -1023,11 +1639,210 @@
           if (loaded === mdFiles.length) {
             renderFileList(searchBox.value);
             saveFilesToSession();
+            showToast(loaded + ' file(s) added');
           }
         };
         reader.readAsText(file);
       });
     });
+
+    // ===== VIEW NAME (editable) =====
+    const viewNameEl = document.getElementById('viewName');
+    let viewName = sessionStorage.getItem(SESSION_KEY + '_viewName') || FOLDER_NAME;
+    viewNameEl.textContent = viewName;
+
+    viewNameEl.addEventListener('click', () => {
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'view-name-input';
+      input.value = viewNameEl.textContent;
+      viewNameEl.replaceWith(input);
+      input.focus();
+      input.select();
+
+      function commit() {
+        viewName = input.value.trim() || FOLDER_NAME;
+        const span = document.createElement('span');
+        span.className = 'view-name-text';
+        span.id = 'viewName';
+        span.title = 'Click to rename this view';
+        span.textContent = viewName;
+        span.addEventListener('click', arguments.callee); // won't work, re-init below
+        input.replaceWith(span);
+        document.title = viewName + ' \u2014 MDView';
+        sessionStorage.setItem(SESSION_KEY + '_viewName', viewName);
+        saveViewToHistory();
+        // Re-bind click
+        span.addEventListener('click', () => {
+          document.getElementById('viewName').click();
+        });
+      }
+
+      input.addEventListener('blur', commit);
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+        if (e.key === 'Escape') { input.value = viewNameEl.textContent; input.blur(); }
+      });
+    });
+
+    document.title = viewName + ' \u2014 MDView';
+
+    // ===== VIEW DRAWER (localStorage — persistent) =====
+    const HISTORY_KEY = 'mdview_history';
+    const viewDrawerBtn = document.getElementById('viewDrawerBtn');
+    const viewDrawer = document.getElementById('viewDrawer');
+    const viewDrawerClose = document.getElementById('viewDrawerClose');
+    const viewDrawerList = document.getElementById('viewDrawerList');
+
+    function getViewHistory() {
+      try {
+        return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+      } catch (e) { return []; }
+    }
+
+    function saveViewToHistory() {
+      const history = getViewHistory();
+      const currentUrl = window.location.href;
+      const existing = history.findIndex(h => h.url === currentUrl);
+      const entry = {
+        name: viewName,
+        url: currentUrl,
+        fileCount: FILES.length,
+        lastOpened: new Date().toISOString()
+      };
+      if (existing !== -1) {
+        history[existing] = entry;
+      } else {
+        history.unshift(entry);
+      }
+      if (history.length > 30) history.length = 30;
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    }
+
+    // ===== CUSTOM CONFIRM DIALOG =====
+    const confirmDialog = document.getElementById('confirmDialog');
+    const confirmTitle = document.getElementById('confirmTitle');
+    const confirmMessage = document.getElementById('confirmMessage');
+    const confirmCancel = document.getElementById('confirmCancel');
+    const confirmOk = document.getElementById('confirmOk');
+    let confirmCallback = null;
+
+    function showConfirm(title, message, onConfirm) {
+      confirmTitle.textContent = title;
+      confirmMessage.textContent = message;
+      confirmCallback = onConfirm;
+      confirmDialog.classList.add('visible');
+    }
+
+    confirmCancel.addEventListener('click', () => {
+      confirmDialog.classList.remove('visible');
+      confirmCallback = null;
+    });
+
+    confirmOk.addEventListener('click', () => {
+      confirmDialog.classList.remove('visible');
+      if (confirmCallback) confirmCallback();
+      confirmCallback = null;
+    });
+
+    function deleteViewFromHistory(url) {
+      const entry = getViewHistory().find(h => h.url === url);
+      const name = entry ? entry.name : 'this view';
+
+      showConfirm(
+        'Delete view',
+        'Delete "' + name + '" permanently? This will remove it from history.',
+        function () {
+          const history = getViewHistory().filter(h => h.url !== url);
+          localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+
+          try {
+            const key = 'mdview_' + (entry ? entry.name : '') + '_state';
+            sessionStorage.removeItem(key);
+          } catch(e) {}
+
+          renderViewDrawer();
+          showToast('View deleted');
+
+          if (url === window.location.href) {
+            if (history.length > 0) {
+              window.location.href = history[0].url;
+            } else {
+              document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:system-ui;color:#888;font-size:16px;">View deleted. Run <code style="margin:0 6px;padding:2px 8px;background:#f0f0f0;border-radius:4px;">mdview &lt;folder&gt;</code> to open a new view.</div>';
+            }
+          }
+        }
+      );
+    }
+
+    function formatTimeAgo(iso) {
+      const diff = Date.now() - new Date(iso).getTime();
+      const mins = Math.floor(diff / 60000);
+      if (mins < 1) return 'Just now';
+      if (mins < 60) return mins + 'm ago';
+      const hrs = Math.floor(mins / 60);
+      if (hrs < 24) return hrs + 'h ago';
+      const days = Math.floor(hrs / 24);
+      if (days < 7) return days + 'd ago';
+      return new Date(iso).toLocaleDateString();
+    }
+
+    function renderViewDrawer() {
+      const history = getViewHistory();
+      const currentUrl = window.location.href;
+      viewDrawerList.innerHTML = '';
+
+      if (history.length === 0) {
+        viewDrawerList.innerHTML = '<li class="view-drawer-empty">No views yet.<br>Open folders with mdview to see them here.</li>';
+        return;
+      }
+
+      history.forEach(h => {
+        const li = document.createElement('li');
+        li.className = 'view-entry' + (h.url === currentUrl ? ' active' : '');
+        li.innerHTML = `
+          <div class="view-entry-icon">MD</div>
+          <div class="view-entry-info">
+            <div class="view-entry-name">${h.name}</div>
+            <div class="view-entry-meta">${h.fileCount || '?'} files &middot; ${formatTimeAgo(h.lastOpened)}</div>
+          </div>
+          <button class="view-entry-delete" title="Delete view"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.15l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/></svg></button>
+        `;
+        li.addEventListener('click', (e) => {
+          if (e.target.closest('.view-entry-delete')) return;
+          if (h.url !== currentUrl) window.location.href = h.url;
+          else closeViewDrawer();
+        });
+        li.querySelector('.view-entry-delete').addEventListener('click', (e) => {
+          e.stopPropagation();
+          deleteViewFromHistory(h.url);
+        });
+        viewDrawerList.appendChild(li);
+      });
+    }
+
+    function toggleViewDrawer() {
+      const isOpen = viewDrawer.classList.contains('open');
+      if (isOpen) {
+        viewDrawer.classList.remove('open');
+        viewDrawerBtn.classList.remove('active');
+      } else {
+        renderViewDrawer();
+        viewDrawer.classList.add('open');
+        viewDrawerBtn.classList.add('active');
+      }
+    }
+
+    function closeViewDrawer() {
+      viewDrawer.classList.remove('open');
+      viewDrawerBtn.classList.remove('active');
+    }
+
+    viewDrawerBtn.addEventListener('click', toggleViewDrawer);
+    viewDrawerClose.addEventListener('click', closeViewDrawer);
+
+    // Save current view on load
+    saveViewToHistory();
 
     // ===== INIT =====
     renderFileList('');
@@ -1054,6 +1869,225 @@
     } else if (FILES.length > 0) {
       openFile(FILES[0]);
     }
+
+    // ===== CONTEXT MENU =====
+    const ctxMenu = document.getElementById('contextMenu');
+    const ctxCopyPath = document.getElementById('ctxCopyPath');
+    const ctxCopyName = document.getElementById('ctxCopyName');
+    const ctxCopyFolder = document.getElementById('ctxCopyFolder');
+    const ctxRemove = document.getElementById('ctxRemove');
+    const toastEl = document.getElementById('toast');
+    let ctxFile = null;
+    let toastTimer = null;
+
+    function showToast(msg) {
+      toastEl.textContent = msg;
+      toastEl.classList.add('visible');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toastEl.classList.remove('visible'), 2000);
+    }
+
+    function hideCtxMenu() {
+      ctxMenu.classList.remove('visible');
+      ctxFile = null;
+    }
+
+    function showCtxMenu(e, file) {
+      e.preventDefault();
+      ctxFile = file;
+
+      // Position menu
+      const x = Math.min(e.clientX, window.innerWidth - 220);
+      const y = Math.min(e.clientY, window.innerHeight - 200);
+      ctxMenu.style.left = x + 'px';
+      ctxMenu.style.top = y + 'px';
+      ctxMenu.classList.add('visible');
+
+      // Hide "copy folder path" for dropped files without real paths
+      const hasRealPath = ctxFile.path && (ctxFile.path.includes('/') || ctxFile.path.includes('\\'));
+      ctxCopyFolder.style.display = hasRealPath ? 'flex' : 'none';
+    }
+
+    // Close all menus on click outside
+    function hideAllMenus() {
+      hideCtxMenu();
+      hideFolderCtxMenu();
+    }
+    document.addEventListener('click', hideAllMenus);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideAllMenus(); });
+
+    // Copy file path
+    ctxCopyPath.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (ctxFile && ctxFile.path) {
+        navigator.clipboard.writeText(ctxFile.path).then(() => showToast('Path copied'));
+      }
+      hideCtxMenu();
+    });
+
+    // Copy file name
+    ctxCopyName.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (ctxFile) {
+        navigator.clipboard.writeText(ctxFile.name).then(() => showToast('Name copied'));
+      }
+      hideCtxMenu();
+    });
+
+    // Copy folder path
+    ctxCopyFolder.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (ctxFile && ctxFile.path) {
+        let dirPath = ctxFile.path.replace(/\\/g, '/');
+        dirPath = dirPath.substring(0, dirPath.lastIndexOf('/'));
+        navigator.clipboard.writeText(dirPath).then(() => showToast('Folder path copied'));
+      }
+      hideCtxMenu();
+    });
+
+    // Remove from view
+    ctxRemove.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (ctxFile) removeFile(ctxFile.id);
+      hideCtxMenu();
+    });
+
+    // ===== FOLDER CONTEXT MENU =====
+    const folderCtxMenu = document.getElementById('folderCtxMenu');
+    const fctxAddFiles = document.getElementById('fctxAddFiles');
+    const fctxRename = document.getElementById('fctxRename');
+    const fctxCopyPath = document.getElementById('fctxCopyPath');
+    const fctxRefresh = document.getElementById('fctxRefresh');
+    const fctxDelete = document.getElementById('fctxDelete');
+    const filePicker = document.getElementById('filePicker');
+    let ctxFolderName = null;
+    let ctxFolderHeader = null;
+
+    function hideFolderCtxMenu() {
+      folderCtxMenu.classList.remove('visible');
+      ctxFolderName = null;
+      ctxFolderHeader = null;
+    }
+
+    function showFolderCtxMenu(e, folderName, headerEl) {
+      e.preventDefault();
+      e.stopPropagation();
+      hideCtxMenu(); // close file menu if open
+      ctxFolderName = folderName;
+      ctxFolderHeader = headerEl;
+
+      const x = Math.min(e.clientX, window.innerWidth - 220);
+      const y = Math.min(e.clientY, window.innerHeight - 250);
+      folderCtxMenu.style.left = x + 'px';
+      folderCtxMenu.style.top = y + 'px';
+      folderCtxMenu.classList.add('visible');
+
+      // Show/hide refresh and copy path based on whether it's an original folder
+      const isOriginal = _ORIGINAL_FILES.some(f => getFileFolder(f) === folderName);
+      const hasRealPath = folderName.includes('/') || folderName.includes('\\');
+      fctxRefresh.style.display = isOriginal ? 'flex' : 'none';
+      fctxCopyPath.style.display = hasRealPath ? 'flex' : 'none';
+    }
+
+    // Add files to folder
+    fctxAddFiles.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const targetFolder = ctxFolderName;
+      hideFolderCtxMenu();
+      filePicker.setAttribute('data-target-folder', targetFolder);
+      filePicker.click();
+    });
+
+    // File picker change handler
+    filePicker.addEventListener('change', (e) => {
+      const files = Array.from(e.target.files);
+      const targetFolder = filePicker.getAttribute('data-target-folder') || 'Ungrouped';
+      const mdFiles = files.filter(f => /\.(md|markdown|mdown)$/i.test(f.name));
+      if (mdFiles.length === 0) return;
+
+      let loaded = 0;
+      mdFiles.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const newFile = { name: file.name, folder: targetFolder, content: ev.target.result };
+          ensureId(newFile);
+          FILES.push(newFile);
+          loaded++;
+          if (loaded === mdFiles.length) {
+            fileCountEl.textContent = FILES.length;
+            renderFileList(searchBox.value);
+            saveFilesToSession();
+            openFile(FILES[FILES.length - 1]);
+            showToast(loaded + ' file(s) added to ' + shortFolderName(targetFolder));
+          }
+        };
+        reader.readAsText(file);
+      });
+      filePicker.value = ''; // reset for next use
+    });
+
+    // Rename folder
+    fctxRename.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const fn = ctxFolderName;
+      const hdr = ctxFolderHeader;
+      hideFolderCtxMenu();
+      if (fn && hdr) startFolderRename(fn, hdr);
+    });
+
+    // Copy folder path
+    fctxCopyPath.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (ctxFolderName) {
+        navigator.clipboard.writeText(ctxFolderName).then(() => showToast('Folder path copied'));
+      }
+      hideFolderCtxMenu();
+    });
+
+    // Refresh folder
+    fctxRefresh.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (ctxFolderName) refetchFolder(ctxFolderName);
+      hideFolderCtxMenu();
+    });
+
+    // Delete folder
+    fctxDelete.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (ctxFolderName) deleteFolder(ctxFolderName);
+      hideFolderCtxMenu();
+    });
+
+    // ===== DELETE FOLDER =====
+    function deleteFolder(folderName) {
+      // Remove all files in this folder
+      for (let i = FILES.length - 1; i >= 0; i--) {
+        if (getFileFolder(FILES[i]) === folderName) {
+          const removedId = FILES[i].id;
+          FILES.splice(i, 1);
+          const tabIdx = openTabs.findIndex(t => t.id === removedId);
+          if (tabIdx !== -1) openTabs.splice(tabIdx, 1);
+          if (activeTab === removedId) activeTab = null;
+        }
+      }
+
+      fileCountEl.textContent = FILES.length;
+
+      // Fix active tab
+      if (!activeTab && openTabs.length > 0) {
+        activeTab = openTabs[0].id;
+        renderContent(openTabs[0]);
+      } else if (!activeTab) {
+        contentEl.innerHTML = '<div class="empty-state"><svg width="48" height="48" viewBox="0 0 16 16" fill="currentColor"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"/></svg><p>Select a file from the sidebar or drag & drop .md files here</p></div>';
+      }
+
+      renderTabs();
+      renderFileList(searchBox.value);
+      saveFilesToSession();
+      showToast('Folder deleted');
+    }
+
+    } // end initApp()
   </script>
 </body>
 </html>
