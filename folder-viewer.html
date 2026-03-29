@@ -430,7 +430,7 @@
       transform: rotate(-90deg);
     }
 
-    .folder-header-icon { flex-shrink: 0; opacity: 0.7; }
+    .folder-header-icon { flex-shrink: 0; color: var(--accent); opacity: 0.8; }
 
     .folder-header-name {
       flex: 1;
@@ -502,8 +502,9 @@
       font-weight: 500;
     }
 
-    .file-item svg { flex-shrink: 0; opacity: 0.6; }
-    .file-item.active svg { opacity: 1; }
+    .file-item > svg { flex-shrink: 0; opacity: 0.4; }
+    .file-item:hover > svg { opacity: 0.6; }
+    .file-item.active > svg { opacity: 0.8; }
 
     .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 
@@ -765,8 +766,8 @@
     /* ===== Theme Toggle ===== */
     .theme-toggle {
       position: fixed;
-      bottom: 20px;
-      right: 20px;
+      bottom: 24px;
+      right: 72px;
       z-index: 10000;
       width: 40px;
       height: 40px;
@@ -997,10 +998,90 @@
       color: var(--text-secondary);
     }
 
+    .toc-btn {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text-secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      z-index: 100;
+      opacity: 0.7;
+    }
+    .toc-btn:hover { opacity: 1; color: var(--accent); }
+    .toc-btn.hidden { display: none; }
+
+    .toc-popup {
+      position: fixed;
+      bottom: 72px;
+      right: 24px;
+      width: 280px;
+      max-height: 400px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+      z-index: 101;
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .toc-popup.visible { display: flex; }
+
+    .toc-popup-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+    .toc-popup-close {
+      background: none; border: none; color: var(--text-secondary);
+      cursor: pointer; font-size: 16px; padding: 0 4px;
+    }
+    .toc-popup-close:hover { color: var(--text); }
+
+    .toc-popup-list {
+      overflow-y: auto;
+      padding: 6px 0;
+    }
+
+    .toc-item {
+      display: block;
+      width: 100%;
+      text-align: left;
+      padding: 5px 14px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .toc-item:hover { background: var(--bg-hover); color: var(--text); }
+    .toc-item.h1 { font-weight: 600; color: var(--text); }
+    .toc-item.h2 { padding-left: 24px; }
+    .toc-item.h3 { padding-left: 38px; font-size: 11px; }
+    .toc-item.h4 { padding-left: 50px; font-size: 11px; }
+
     @media print {
       .sidebar, .brand-bar, .tab-bar, .view-drawer, .view-drawer-btn,
       .resize-handle, .search-wrapper, .context-menu, .page-transition,
-      .drop-overlay, .confirm-overlay, .toast { display: none !important; }
+      .drop-overlay, .confirm-overlay, .toast, .toc-btn, .toc-popup { display: none !important; }
       .main { margin-left: 0 !important; }
       .content { padding: 20px !important; }
       body { background: white !important; color: black !important; }
@@ -1166,6 +1247,18 @@
 
     <!-- Toast -->
     <div class="toast" id="toast"></div>
+
+    <!-- TOC Button + Popup -->
+    <button class="toc-btn hidden" id="tocBtn" title="Table of contents">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M2 4a1 1 0 1 0 0-2 1 1 0 0 0 0 2Zm3.75-1.5a.75.75 0 0 0 0 1.5h8.5a.75.75 0 0 0 0-1.5h-8.5Zm0 5a.75.75 0 0 0 0 1.5h8.5a.75.75 0 0 0 0-1.5h-8.5Zm0 5a.75.75 0 0 0 0 1.5h8.5a.75.75 0 0 0 0-1.5h-8.5ZM3 8a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm-1 6a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z"/></svg>
+    </button>
+    <div class="toc-popup" id="tocPopup">
+      <div class="toc-popup-header">
+        <span>On this page</span>
+        <button class="toc-popup-close" id="tocPopupClose">&times;</button>
+      </div>
+      <div class="toc-popup-list" id="tocPopupList"></div>
+    </div>
 
     <!-- Link Dialog -->
     <div class="link-dialog-overlay" id="linkDialog">
@@ -1431,6 +1524,10 @@
 
     // ===== EMPTY STATE HELPER =====
     function getEmptyStateHTML() {
+      var _tocBtn = document.getElementById('tocBtn');
+      if (_tocBtn) { _tocBtn.classList.add('hidden'); }
+      var _tocPopup = document.getElementById('tocPopup');
+      if (_tocPopup) { _tocPopup.classList.remove('visible'); }
       return '<div class="empty-state">' +
         '<div class="empty-state-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></div>' +
         '<h2>No file selected</h2>' +
@@ -1923,6 +2020,7 @@
                 var hash = window.location.hash.slice(1);
                 scrollToHash();
                 interceptMdLinks();
+                updateToc();
               }
             } else {
               contentEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:200px;color:var(--text-secondary);">Failed to load file</div>';
@@ -1936,6 +2034,7 @@
       contentEl.innerHTML = '<div class="md-body">' + marked.parse(file.content) + '</div>';
       scrollToHash();
       interceptMdLinks();
+      updateToc();
     }
 
     function scrollToHash() {
@@ -1950,6 +2049,41 @@
         }
       }, 200);
     }
+
+    // ===== TABLE OF CONTENTS =====
+    const tocBtn = document.getElementById('tocBtn');
+    const tocPopup = document.getElementById('tocPopup');
+    const tocPopupList = document.getElementById('tocPopupList');
+
+    function updateToc() {
+      const headings = contentEl.querySelectorAll('.md-body h1, .md-body h2, .md-body h3, .md-body h4');
+      if (headings.length < 2) {
+        tocBtn.classList.add('hidden');
+        tocPopup.classList.remove('visible');
+        return;
+      }
+      tocBtn.classList.remove('hidden');
+      tocPopupList.innerHTML = '';
+      headings.forEach(function(h) {
+        var btn = document.createElement('button');
+        btn.className = 'toc-item ' + h.tagName.toLowerCase();
+        btn.textContent = h.textContent;
+        btn.title = h.textContent;
+        btn.addEventListener('click', function() {
+          h.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          setTimeout(function() { window.scrollBy({ top: -20, behavior: 'smooth' }); }, 400);
+          tocPopup.classList.remove('visible');
+        });
+        tocPopupList.appendChild(btn);
+      });
+    }
+
+    tocBtn.addEventListener('click', function() {
+      tocPopup.classList.toggle('visible');
+    });
+    document.getElementById('tocPopupClose').addEventListener('click', function() {
+      tocPopup.classList.remove('visible');
+    });
 
     // ===== INTERCEPT .md LINK CLICKS =====
     const linkDialogEl = document.getElementById('linkDialog');
@@ -2542,6 +2676,7 @@
       hideCtxMenu();
       hideFolderCtxMenu();
       hideTabCtxMenu();
+      tocPopup.classList.remove('visible');
     }
     document.addEventListener('click', hideAllMenus);
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideAllMenus(); });
