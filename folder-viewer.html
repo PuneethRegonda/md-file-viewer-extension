@@ -2482,9 +2482,10 @@
 
     // ===== DELETE FOLDER =====
     function deleteFolder(folderName) {
-      // Remove all files in this folder
+      // Remove all files in this folder and its subfolders
       for (let i = FILES.length - 1; i >= 0; i--) {
-        if (getFileFolder(FILES[i]) === folderName) {
+        const f = getFileFolder(FILES[i]);
+        if (f === folderName || f.startsWith(folderName + '/')) {
           const removedId = FILES[i].id;
           FILES.splice(i, 1);
           const tabIdx = openTabs.findIndex(t => t.id === removedId);
