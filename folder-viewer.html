@@ -1050,7 +1050,7 @@
           <h2>No file selected</h2>
           <p>Pick a file from the sidebar, or drag & drop markdown files anywhere on this page.</p>
           <div class="empty-state-actions">
-            <button class="empty-state-btn primary" onclick="var fp=document.getElementById('filePicker');fp.setAttribute('data-target-folder','Ungrouped');fp.click();">
+            <button class="empty-state-btn primary" onclick="var fp=document.getElementById('filePicker');fp.setAttribute('data-target-folder',typeof ROOT_FOLDER!=='undefined'?ROOT_FOLDER:'Root');fp.click();">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2Z"/></svg>
               Add files
             </button>
@@ -1473,19 +1473,8 @@
     const FILES = loadFilesFromSession();
     const openTabs = []; // { id, name, path, content }
     let activeTab = null; // file.id
+    const ROOT_FOLDER = FOLDER_NAME || 'Root';
     const collapsedFolders = new Set(); // folder paths that are collapsed
-    // Pre-collapse all subfolders (depth > 0) on initial load
-    (function initCollapsed() {
-      FILES.forEach(f => {
-        const folder = getFileFolder(f);
-        if (folder === 'Ungrouped') return;
-        const parts = folder.split('/');
-        // Collapse every path segment beyond the first level
-        for (let i = 1; i < parts.length; i++) {
-          collapsedFolders.add(parts.slice(0, i + 1).join('/'));
-        }
-      });
-    })();
 
     // Helper: get folder group for a file
     function getFileFolder(file) {
@@ -1494,14 +1483,8 @@
       const n = (file.name || '').replace(/\\/g, '/');
       const lastSlash = n.lastIndexOf('/');
       if (lastSlash > 0) return n.substring(0, lastSlash);
-      // Fallback to path-based grouping for legacy views
-      if (!file.path) return 'Ungrouped';
-      const p = file.path.replace(/\\/g, '/');
-      const pSlash = p.lastIndexOf('/');
-      if (pSlash <= 0) return 'Ungrouped';
-      let folder = p.substring(0, pSlash);
-      if (folder.startsWith('/')) folder = folder.substring(1);
-      return folder || 'Ungrouped';
+      // Name has no slash — it's a root-level file
+      return ROOT_FOLDER;
     }
 
     // Helper: short folder name for display
@@ -1542,7 +1525,7 @@
       const root = { children: {}, files: [] };
       files.forEach(file => {
         const folder = getFileFolder(file);
-        if (folder === 'Ungrouped') { root.files.push(file); return; }
+        if (folder === ROOT_FOLDER) { root.files.push(file); return; }
         const parts = folder.split('/');
         let node = root;
         parts.forEach(part => {
@@ -1554,6 +1537,12 @@
       return root;
     }
 
+    function countTreeFiles(node) {
+      let c = node.files.length;
+      Object.values(node.children).forEach(child => c += countTreeFiles(child));
+      return c;
+    }
+
     function renderFileList(filter) {
       fileListEl.innerHTML = '';
       fileCountEl.textContent = FILES.length;
@@ -1561,9 +1550,9 @@
       const filtered = FILES.filter(f => f.name.toLowerCase().includes(q));
       const tree = buildTree(filtered);
 
-      // Render root-level files (Ungrouped)
+      // Render root-level files under project name
       if (tree.files.length > 0) {
-        const rootGroup = createFolderGroup('Ungrouped', 'Ungrouped', tree.files, 0, tree.files.length);
+        const rootGroup = createFolderGroup(ROOT_FOLDER, ROOT_FOLDER, tree.files, 0, tree.files.length);
         fileListEl.appendChild(rootGroup);
       }
 
@@ -1574,19 +1563,12 @@
     }
 
     function renderTreeNode(name, fullPath, node, parent, depth) {
-      // Count all files in this subtree
-      function countFiles(n) {
-        let c = n.files.length;
-        Object.values(n.children).forEach(child => c += countFiles(child));
-        return c;
-      }
-      const totalFiles = countFiles(node);
-      if (totalFiles === 0) return;
+      const total = countTreeFiles(node);
+      if (total === 0) return;
 
-      const group = createFolderGroup(name, fullPath, node.files, depth, totalFiles);
+      const group = createFolderGroup(name, fullPath, node.files, depth, total);
       parent.appendChild(group);
 
-      // Render child folders nested inside this group's files container
       const filesContainer = group.querySelector('.folder-files');
       Object.keys(node.children).sort().forEach(childName => {
         renderTreeNode(childName, fullPath + '/' + childName, node.children[childName], filesContainer, depth + 1);
@@ -1636,7 +1618,7 @@
         const item = document.createElement('div');
         item.className = 'file-item' + (activeTab === file.id ? ' active' : '');
         item.title = file.path || file.name;
-        if (depth >= 0) item.style.paddingLeft = (14 + (depth + 1) * 12) + 'px';
+        item.style.paddingLeft = (14 + (depth + 1) * 12) + 'px';
         item.innerHTML = `
           <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
             <path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"/>
@@ -1774,9 +1756,30 @@
       }
       activeTab = file.id;
       renderTabs();
-      renderContent(file);
       renderFileList(searchBox.value);
-      saveFilesToSession();
+
+      if (file.content) {
+        // Content already loaded
+        renderContent(file);
+        saveFilesToSession();
+      } else {
+        // Lazy-load from API
+        contentEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:200px;color:var(--text-secondary);font-size:13px;">Loading...</div>';
+        fetch(API + '/api/file-content?path=' + encodeURIComponent(file.path))
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (data.content) {
+              file.content = data.content;
+              if (activeTab === file.id) renderContent(file);
+              saveFilesToSession();
+            } else {
+              contentEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:200px;color:var(--text-secondary);font-size:13px;">Failed to load file</div>';
+            }
+          })
+          .catch(function() {
+            contentEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:200px;color:var(--text-secondary);font-size:13px;">Server not running. Start with: mdview --serve</div>';
+          });
+      }
     }
 
     function closeTab(fileId, e) {
@@ -2000,7 +2003,7 @@
             openFile(duplicate);
           } else {
             // Add as new file
-            const newFile = { name: file.name, folder: 'Ungrouped', content: content };
+            const newFile = { name: file.name, folder: ROOT_FOLDER, content: content };
             ensureId(newFile);
             FILES.push(newFile);
             fileCountEl.textContent = FILES.length;
@@ -2380,7 +2383,7 @@
     // File picker change handler
     filePicker.addEventListener('change', (e) => {
       const files = Array.from(e.target.files);
-      const targetFolder = filePicker.getAttribute('data-target-folder') || 'Ungrouped';
+      const targetFolder = filePicker.getAttribute('data-target-folder') || ROOT_FOLDER;
       const mdFiles = files.filter(f => /\.(md|markdown|mdown)$/i.test(f.name));
       if (mdFiles.length === 0) {
         showConfirm('No markdown files', 'No <code>.md</code> files found in the selected files.', null, { hideOk: true, cancelText: 'OK' });

@@ -88,14 +88,22 @@ function createView(targetPath) {
     walkDir(abs).sort().forEach(full => {
       const rel = path.relative(abs, full);
       const normalized = full.replace(/\\/g, '/');
-      files.push({ id: normalized, name: rel.replace(/\\/g, '/'), path: normalized, content: fs.readFileSync(full, 'utf-8') });
+      files.push({ id: normalized, name: rel.replace(/\\/g, '/'), path: normalized });
     });
   } else if (MD_EXT.test(abs)) {
     const full = abs.replace(/\\/g, '/');
-    files.push({ id: full, name: path.basename(abs), path: full, content: fs.readFileSync(abs, 'utf-8') });
+    files.push({ id: full, name: path.basename(abs), path: full });
   }
 
   if (!files.length) { console.error('No markdown files found.'); process.exit(1); }
+
+  const FILE_LIMIT = 500;
+  if (files.length > FILE_LIMIT) {
+    console.log(`\n  Found ${files.length} markdown files — that's a lot!`);
+    console.log(`  Only the first ${FILE_LIMIT} files will be loaded.`);
+    console.log(`  Tip: open a subfolder instead for better performance.\n`);
+    files.length = FILE_LIMIT;
+  }
 
   const label = path.basename(abs).replace(MD_EXT, '');
   const viewName = label + '-' + hash(abs);
@@ -276,7 +284,8 @@ function runServer() {
     res.setHeader('Content-Type', 'application/json');
     if (req.method === 'OPTIONS') { res.writeHead(200); res.end(); return; }
 
-    const p = new URL(req.url, `http://localhost:${API_PORT}`).pathname;
+    const reqUrl = new URL(req.url, `http://localhost:${API_PORT}`);
+    const p = reqUrl.pathname;
 
     // List views
     if (p === '/api/views' && req.method === 'GET') {
@@ -315,6 +324,21 @@ function runServer() {
           res.end(JSON.stringify({ ok: true, viewName }));
         } catch(e) { res.writeHead(400); res.end('{"error":"invalid json"}'); }
       });
+      return;
+    }
+
+    // Lazy-load file content from disk
+    if (p === '/api/file-content' && req.method === 'GET') {
+      const filePath = decodeURIComponent(reqUrl.searchParams.get('path') || '');
+      if (!filePath) { res.writeHead(400); res.end('{"error":"missing path"}'); return; }
+      // Security: only allow reading .md files
+      if (!MD_EXT.test(filePath)) { res.writeHead(403); res.end('{"error":"not a markdown file"}'); return; }
+      try {
+        const content = fs.readFileSync(filePath, 'utf-8');
+        res.end(JSON.stringify({ content }));
+      } catch(e) {
+        res.writeHead(404); res.end('{"error":"file not found"}');
+      }
       return;
     }
 
