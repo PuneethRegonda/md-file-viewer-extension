@@ -5,8 +5,9 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
-const { exec } = require('child_process');
+const { exec, spawn } = require('child_process');
 const url = require('url');
+const http = require('http');
 
 const VERSION = '1.0.0';
 const PACKAGE_ROOT = path.resolve(__dirname, '..');
@@ -14,6 +15,7 @@ const MDVIEW_HOME = path.join(os.homedir(), '.mdview');
 const VIEWS_DIR = path.join(MDVIEW_HOME, 'views');
 const VIEWS_JSON = path.join(MDVIEW_HOME, 'views.json');
 const MD_EXT = /\.(md|markdown|mdown)$/i;
+const API_PORT = 51437;
 
 // ===== Setup =====
 function ensureHome() {
@@ -250,6 +252,138 @@ function formatAge(ms) {
   return Math.floor(h / 24) + 'd ago';
 }
 
+// ===== Background API Server =====
+function runServer() {
+  ensureHome();
+  const server = http.createServer((req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Content-Type', 'application/json');
+    if (req.method === 'OPTIONS') { res.writeHead(200); res.end(); return; }
+
+    const p = new URL(req.url, `http://localhost:${API_PORT}`).pathname;
+
+    // List views
+    if (p === '/api/views' && req.method === 'GET') {
+      res.end(JSON.stringify(readViews()));
+      return;
+    }
+
+    // Create view from browser upload
+    if (p === '/api/views' && req.method === 'POST') {
+      let body = '';
+      req.on('data', chunk => body += chunk);
+      req.on('end', () => {
+        try {
+          const data = JSON.parse(body);
+          const label = data.folderName || 'Imported';
+          const files = data.files || [];
+          if (!files.length) { res.writeHead(400); res.end('{"error":"no files"}'); return; }
+
+          const viewName = label + '-' + hash(label + '_' + Date.now());
+          const viewData = { folderName: label, sourcePath: 'browser-upload', files };
+
+          fs.writeFileSync(path.join(VIEWS_DIR, viewName + '.js'),
+            'window.__MDVIEW_DATA = ' + JSON.stringify(viewData) + ';', 'utf-8');
+
+          const views = readViews();
+          const entry = { viewName, folderName: label, sourcePath: 'browser-upload', fileCount: files.length, lastOpened: Date.now() };
+          views.unshift(entry);
+          writeViews(views);
+
+          fs.writeFileSync(path.join(MDVIEW_HOME, 'last-view.js'),
+            `window.__MDVIEW_LAST = "${viewName}";`, 'utf-8');
+
+          res.end(JSON.stringify({ ok: true, viewName }));
+        } catch(e) { res.writeHead(400); res.end('{"error":"invalid json"}'); }
+      });
+      return;
+    }
+
+    // Delete view
+    if (p.startsWith('/api/views/') && req.method === 'DELETE') {
+      const name = decodeURIComponent(p.slice('/api/views/'.length));
+      const views = readViews();
+      const match = views.find(v => v.viewName === name);
+      if (!match) { res.writeHead(404); res.end('{"error":"not found"}'); return; }
+
+      // Delete data file
+      const f = path.join(VIEWS_DIR, match.viewName + '.js');
+      if (fs.existsSync(f)) fs.unlinkSync(f);
+
+      // Update views.json + views-index.js
+      const remaining = views.filter(v => v.viewName !== name);
+      writeViews(remaining);
+
+      // Update last-view pointer
+      if (remaining.length > 0) {
+        fs.writeFileSync(path.join(MDVIEW_HOME, 'last-view.js'),
+          `window.__MDVIEW_LAST = "${remaining[0].viewName}";`, 'utf-8');
+      } else {
+        try { fs.unlinkSync(path.join(MDVIEW_HOME, 'last-view.js')); } catch(e) {}
+      }
+
+      res.end(JSON.stringify({ ok: true, remaining }));
+      return;
+    }
+
+    // Health check
+    if (p === '/api/ping') { res.end('{"ok":true}'); return; }
+
+    res.writeHead(404); res.end('{"error":"not found"}');
+  });
+
+  server.listen(API_PORT, '127.0.0.1', () => {
+    fs.writeFileSync(path.join(MDVIEW_HOME, 'server.pid'), String(process.pid));
+  });
+  server.on('error', (e) => {
+    if (e.code === 'EADDRINUSE') return; // already running
+    console.error('Server error:', e.message);
+  });
+
+  // Auto-exit after 2 hours
+  setTimeout(() => { try { fs.unlinkSync(path.join(MDVIEW_HOME, 'server.pid')); } catch(e) {} process.exit(0); }, 2 * 60 * 60 * 1000);
+  process.on('SIGINT', () => { try { fs.unlinkSync(path.join(MDVIEW_HOME, 'server.pid')); } catch(e) {} process.exit(0); });
+  process.on('SIGTERM', () => { try { fs.unlinkSync(path.join(MDVIEW_HOME, 'server.pid')); } catch(e) {} process.exit(0); });
+}
+
+// Start server in background (invisible to user)
+function ensureServer() {
+  return new Promise(resolve => {
+    const check = http.get(`http://127.0.0.1:${API_PORT}/api/ping`, (res) => {
+      res.resume();
+      resolve(); // already running
+    });
+    check.on('error', () => {
+      // Not running — spawn in background
+      const child = spawn(process.execPath, [__filename, '--serve'], {
+        detached: true, stdio: 'ignore', windowsHide: true
+      });
+      child.unref();
+      setTimeout(resolve, 600); // give it time to start
+    });
+    check.setTimeout(300, () => check.destroy());
+  });
+}
+
+function stopServer() {
+  return new Promise(resolve => {
+    const req = http.get(`http://127.0.0.1:${API_PORT}/api/ping`, () => {
+      // Running — kill it
+      try {
+        const pid = fs.readFileSync(path.join(MDVIEW_HOME, 'server.pid'), 'utf-8').trim();
+        process.kill(parseInt(pid));
+      } catch(e) {}
+      try { fs.unlinkSync(path.join(MDVIEW_HOME, 'server.pid')); } catch(e) {}
+      console.log('  Server stopped.');
+      resolve();
+    });
+    req.on('error', () => { console.log('  Server is not running.'); resolve(); });
+    req.setTimeout(300, () => { req.destroy(); resolve(); });
+  });
+}
+
 function showHelp() {
   console.log(`
   MDView v${VERSION}
@@ -260,6 +394,7 @@ function showHelp() {
     mdview <path>         Open a .md file or folder
     mdview --list         List all saved views
     mdview --reset        Delete all views and start fresh
+    mdview --stop         Stop background server
     mdview --version      Show version
     mdview --help         Show this help
 
@@ -273,13 +408,24 @@ function showHelp() {
 }
 
 // ===== Main =====
-const args = process.argv.slice(2);
+async function main() {
+  const args = process.argv.slice(2);
 
-if (args.includes('--help') || args.includes('-h')) { showHelp(); process.exit(); }
-if (args.includes('--version') || args.includes('-v')) { console.log(`mdview v${VERSION}`); process.exit(); }
-if (args.includes('--list') || args.includes('-l')) { cmdList(); process.exit(); }
-if (args.includes('--reset')) { cmdReset(); process.exit(); }
+  // Hidden: run server in foreground (called by background spawn)
+  if (args.includes('--serve')) { runServer(); return; }
 
-const target = args.find(a => !a.startsWith('--'));
-if (target) cmdOpen(target);
-else cmdOpenLast();
+  if (args.includes('--help') || args.includes('-h')) { showHelp(); return; }
+  if (args.includes('--version') || args.includes('-v')) { console.log(`mdview v${VERSION}`); return; }
+  if (args.includes('--list') || args.includes('-l')) { cmdList(); return; }
+  if (args.includes('--reset')) { cmdReset(); return; }
+  if (args.includes('--stop')) { await stopServer(); return; }
+
+  // Start server in background before opening anything
+  await ensureServer();
+
+  const target = args.find(a => !a.startsWith('--'));
+  if (target) cmdOpen(target);
+  else cmdOpenLast();
+}
+
+main();
