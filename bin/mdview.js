@@ -517,11 +517,17 @@ function cmdUpdate() {
   console.log('  Checking for updates...\n');
   const { execSync } = require('child_process');
   try {
-    const result = execSync('npm install -g mdview-cli@latest', { encoding: 'utf-8', stdio: 'pipe' });
-    const match = result.match(/mdview-cli@([\d.]+)/);
-    console.log(match ? `  Updated to v${match[1]}` : '  Updated to latest.');
+    // Check latest version on npm
+    const latest = execSync('npm view mdview-cli version', { encoding: 'utf-8', stdio: 'pipe' }).trim();
+    if (latest === VERSION) {
+      console.log(`  Already on latest (v${VERSION}).`);
+      return;
+    }
+    console.log(`  Current: v${VERSION}  →  Latest: v${latest}\n  Updating...`);
+    execSync('npm install -g mdview-cli@' + latest, { encoding: 'utf-8', stdio: 'inherit' });
+    console.log(`\n  Updated to v${latest}`);
   } catch(e) {
-    console.error('  Update failed. Try: sudo npm install -g mdview-cli@latest');
+    console.error('  Update failed. Try manually:\n  npm install -g mdview-cli@latest');
   }
 }
 
