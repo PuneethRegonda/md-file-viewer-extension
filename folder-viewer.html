@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{FOLDER_NAME}} — MD Viewer</title>
+  <script src="{{MARKED_PATH}}"></script>
+  <style>
+    *, *::before, *::after {
+      margin: 0; padding: 0; box-sizing: border-box;
+      transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+    }
+
+    /* ===== Light Theme ===== */
+    :root {
+      --bg: #ffffff;
+      --bg-secondary: #f6f8fa;
+      --bg-hover: #eef1f5;
+      --bg-active: #ffffff;
+      --text: #1f2328;
+      --text-secondary: #656d76;
+      --border: #d1d9e0;
+      --border-active: #fd8c73;
+      --accent: #0969da;
+      --accent-hover: #0550ae;
+      --code-bg: #f0f3f6;
+      --code-text: #cf222e;
+      --pre-bg: #f6f8fa;
+      --pre-border: #d1d9e0;
+      --blockquote-bg: #f6f8fa;
+      --blockquote-border: #d1d9e0;
+      --blockquote-text: #656d76;
+      --heading: #1f2328;
+      --heading-border: #d1d9e0;
+      --table-row-hover: #f6f8fa;
+      --table-border: #d1d9e0;
+      --sidebar-bg: #f6f8fa;
+      --sidebar-active: #ffffff;
+      --sidebar-text: #656d76;
+      --sidebar-text-active: #1f2328;
+      --toggle-bg: #25292e;
+      --toggle-color: #ffd43b;
+      --selection-bg: #ddf4ff;
+      --selection-color: #1f2328;
+      --counter-bg: #e8e8ed;
+      --counter-text: #656d76;
+      --search-bg: #f6f8fa;
+      --search-border: #d1d9e0;
+      --folder-icon: #54aeff;
+    }
+
+    /* ===== Dark Theme ===== */
+    [data-theme="dark"] {
+      --bg: #0d1117;
+      --bg-secondary: #161b22;
+      --bg-hover: #1c2129;
+      --bg-active: #0d1117;
+      --text: #e6edf3;
+      --text-secondary: #8b949e;
+      --border: #30363d;
+      --border-active: #f78166;
+      --accent: #58a6ff;
+      --accent-hover: #79c0ff;
+      --code-bg: #1c2129;
+      --code-text: #ff7b72;
+      --pre-bg: #161b22;
+      --pre-border: #30363d;
+      --blockquote-bg: #161b22;
+      --blockquote-border: #30363d;
+      --blockquote-text: #8b949e;
+      --heading: #e6edf3;
+      --heading-border: #21262d;
+      --table-row-hover: #161b22;
+      --table-border: #30363d;
+      --sidebar-bg: #161b22;
+      --sidebar-active: #0d1117;
+      --sidebar-text: #8b949e;
+      --sidebar-text-active: #e6edf3;
+      --toggle-bg: #f0f0f5;
+      --toggle-color: #e67700;
+      --selection-bg: #1f3a5f;
+      --selection-color: #e6edf3;
+      --counter-bg: #30363d;
+      --counter-text: #8b949e;
+      --search-bg: #161b22;
+      --search-border: #30363d;
+      --folder-icon: #58a6ff;
+    }
+
+    ::selection { background: var(--selection-bg); color: var(--selection-color); }
+
+    html, body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      background: var(--bg);
+      color: var(--text);
+      height: 100%;
+    }
+
+    /* ===== Layout ===== */
+    .app {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* ===== Sidebar ===== */
+    .sidebar {
+      width: 300px;
+      min-width: 300px;
+      background: var(--sidebar-bg);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      position: sticky;
+      top: 0;
+      overflow: hidden;
+    }
+
+    .sidebar-header {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sidebar-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 12px;
+    }
+
+    .sidebar-title svg { flex-shrink: 0; }
+
+    .file-count {
+      font-size: 12px;
+      font-weight: 500;
+      background: var(--counter-bg);
+      color: var(--counter-text);
+      padding: 0 8px;
+      border-radius: 10px;
+      margin-left: auto;
+    }
+
+    .search-box {
+      width: 100%;
+      padding: 6px 12px;
+      font-size: 13px;
+      border: 1px solid var(--search-border);
+      border-radius: 6px;
+      background: var(--search-bg);
+      color: var(--text);
+      outline: none;
+    }
+
+    .search-box:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.15);
+    }
+
+    .file-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+    }
+
+    .file-list::-webkit-scrollbar { width: 6px; }
+    .file-list::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 3px;
+    }
+
+    .file-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--sidebar-text);
+      border: 1px solid transparent;
+      user-select: none;
+    }
+
+    .file-item:hover {
+      background: var(--bg-hover);
+      color: var(--text);
+    }
+
+    .file-item.active {
+      background: var(--sidebar-active);
+      color: var(--sidebar-text-active);
+      border-color: var(--border);
+      font-weight: 500;
+    }
+
+    .file-item svg { flex-shrink: 0; opacity: 0.6; }
+    .file-item.active svg { opacity: 1; }
+
+    .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* ===== Main Content ===== */
+    .main {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ===== Tab Bar ===== */
+    .tab-bar {
+      display: flex;
+      align-items: stretch;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .tab-bar::-webkit-scrollbar { height: 0; }
+
+    .tab {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 16px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      border-right: 1px solid var(--border);
+      white-space: nowrap;
+      user-select: none;
+      background: transparent;
+    }
+
+    .tab:hover {
+      background: var(--bg-hover);
+      color: var(--text);
+    }
+
+    .tab.active {
+      background: var(--bg-active);
+      color: var(--text);
+      font-weight: 500;
+      border-bottom-color: var(--border-active);
+    }
+
+    .tab svg { opacity: 0.5; }
+    .tab.active svg { opacity: 0.8; }
+
+    .tab-close {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      border-radius: 4px;
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      opacity: 0;
+      margin-left: 4px;
+    }
+
+    .tab:hover .tab-close { opacity: 0.6; }
+    .tab-close:hover { opacity: 1 !important; background: var(--bg-hover); }
+
+    /* ===== Content Area ===== */
+    .content {
+      flex: 1;
+      padding: 40px 48px 80px;
+      max-width: 900px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 60vh;
+      color: var(--text-secondary);
+      gap: 12px;
+    }
+
+    .empty-state svg { opacity: 0.3; }
+    .empty-state p { font-size: 15px; }
+
+    /* ===== Theme Toggle ===== */
+    .theme-toggle {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 10000;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--toggle-bg);
+      color: var(--toggle-color);
+      cursor: pointer;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    }
+
+    .theme-toggle:hover { transform: scale(1.1); }
+
+    /* ===== Markdown Styles ===== */
+    .md-body { line-height: 1.7; font-size: 16px; color: var(--text); }
+
+    .md-body h1, .md-body h2, .md-body h3,
+    .md-body h4, .md-body h5, .md-body h6 {
+      font-weight: 600;
+      line-height: 1.3;
+      margin-top: 1.75em;
+      margin-bottom: 0.75em;
+      color: var(--heading);
+    }
+
+    .md-body h1 { font-size: 2em; padding-bottom: 0.35em; border-bottom: 1px solid var(--heading-border); }
+    .md-body h2 { font-size: 1.5em; padding-bottom: 0.3em; border-bottom: 1px solid var(--heading-border); }
+    .md-body h3 { font-size: 1.25em; }
+    .md-body h4 { font-size: 1em; }
+    .md-body h5 { font-size: 0.875em; }
+    .md-body h6 { font-size: 0.85em; color: var(--text-secondary); }
+
+    .md-body h1:first-child, .md-body h2:first-child, .md-body h3:first-child { margin-top: 0; }
+
+    .md-body p { margin: 0 0 1em; }
+    .md-body strong { font-weight: 600; }
+
+    .md-body a { color: var(--accent); text-decoration: none; }
+    .md-body a:hover { text-decoration: underline; color: var(--accent-hover); }
+
+    .md-body ul, .md-body ol { margin: 0 0 1em; padding-left: 2em; }
+    .md-body li { margin-bottom: 0.3em; }
+    .md-body li > p { margin-bottom: 0.5em; }
+
+    .md-body blockquote {
+      margin: 0 0 1em;
+      padding: 0.5em 1em;
+      border-left: 4px solid var(--blockquote-border);
+      background: var(--blockquote-bg);
+      color: var(--blockquote-text);
+      border-radius: 0 6px 6px 0;
+    }
+
+    .md-body blockquote p:last-child { margin-bottom: 0; }
+
+    .md-body code {
+      font-family: 'Fira Code', 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+      font-size: 0.875em;
+      padding: 0.2em 0.4em;
+      border-radius: 6px;
+      background: var(--code-bg);
+      color: var(--code-text);
+    }
+
+    .md-body pre {
+      margin: 0 0 1.25em;
+      padding: 16px;
+      border-radius: 8px;
+      overflow-x: auto;
+      background: var(--pre-bg);
+      border: 1px solid var(--pre-border);
+      font-size: 0.875em;
+      line-height: 1.55;
+    }
+
+    .md-body pre code {
+      padding: 0; background: transparent; border-radius: 0;
+      color: var(--text); font-size: inherit;
+    }
+
+    .md-body hr {
+      border: none; height: 1px;
+      background: var(--border);
+      margin: 2em 0;
+    }
+
+    .md-body table {
+      width: 100%; border-collapse: collapse;
+      margin: 0 0 1.25em; font-size: 0.95em;
+    }
+
+    .md-body th, .md-body td {
+      padding: 8px 13px;
+      border: 1px solid var(--table-border);
+      text-align: left;
+    }
+
+    .md-body th { font-weight: 600; background: var(--bg-secondary); }
+    .md-body tr:hover td { background: var(--table-row-hover); }
+
+    .md-body img {
+      max-width: 100%; border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+
+    .md-body input[type="checkbox"] {
+      margin-right: 0.5em;
+      accent-color: var(--accent);
+    }
+
+    .md-body pre::-webkit-scrollbar { height: 6px; }
+    .md-body pre::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-title">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="var(--folder-icon)"><path d="M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75Z"/></svg>
+          <span id="folderName">{{FOLDER_NAME}}</span>
+          <span class="file-count" id="fileCount">0</span>
+        </div>
+        <input type="text" class="search-box" id="searchBox" placeholder="Filter files..." autocomplete="off">
+      </div>
+      <div class="file-list" id="fileList"></div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+      <div class="tab-bar" id="tabBar"></div>
+      <div class="content" id="content">
+        <div class="empty-state">
+          <svg width="48" height="48" viewBox="0 0 16 16" fill="currentColor"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"/></svg>
+          <p>Select a file from the sidebar to preview</p>
+        </div>
+      </div>
+    </main>
+
+    <!-- Theme Toggle -->
+    <button class="theme-toggle" id="themeToggle" title="Toggle dark/light mode"></button>
+  </div>
+
+  <script>
+    // ===== DATA (injected by CLI) =====
+    const FILES = {{FILES_JSON}};
+    const FOLDER_NAME = '{{FOLDER_NAME}}';
+
+    // ===== STATE =====
+    const openTabs = []; // { name, content }
+    let activeTab = null;
+
+    // ===== THEME =====
+    const root = document.documentElement;
+    const themeBtn = document.getElementById('themeToggle');
+    let theme = localStorage.getItem('md-viewer-theme') || 'light';
+    applyTheme(theme);
+
+    function applyTheme(t) {
+      theme = t;
+      root.setAttribute('data-theme', t);
+      themeBtn.textContent = t === 'light' ? '\u{1F319}' : '\u2600\uFE0F';
+      localStorage.setItem('md-viewer-theme', t);
+    }
+
+    themeBtn.addEventListener('click', () => applyTheme(theme === 'light' ? 'dark' : 'light'));
+
+    // ===== MARKED CONFIG =====
+    marked.setOptions({ gfm: true, breaks: true });
+
+    // ===== SIDEBAR =====
+    const fileListEl = document.getElementById('fileList');
+    const fileCountEl = document.getElementById('fileCount');
+    const searchBox = document.getElementById('searchBox');
+
+    fileCountEl.textContent = FILES.length;
+
+    function renderFileList(filter) {
+      fileListEl.innerHTML = '';
+      const q = (filter || '').toLowerCase();
+      const filtered = FILES.filter(f => f.name.toLowerCase().includes(q));
+
+      filtered.forEach(file => {
+        const item = document.createElement('div');
+        item.className = 'file-item' + (activeTab === file.name ? ' active' : '');
+        item.innerHTML = `
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"/>
+          </svg>
+          <span class="file-name">${file.name}</span>
+        `;
+        item.addEventListener('click', () => openFile(file));
+        fileListEl.appendChild(item);
+      });
+    }
+
+    searchBox.addEventListener('input', () => renderFileList(searchBox.value));
+
+    // ===== TABS =====
+    const tabBar = document.getElementById('tabBar');
+    const contentEl = document.getElementById('content');
+
+    function openFile(file) {
+      // Add to tabs if not already open
+      if (!openTabs.find(t => t.name === file.name)) {
+        openTabs.push(file);
+      }
+      activeTab = file.name;
+      renderTabs();
+      renderContent(file);
+      renderFileList(searchBox.value);
+    }
+
+    function closeTab(fileName, e) {
+      e.stopPropagation();
+      const idx = openTabs.findIndex(t => t.name === fileName);
+      if (idx === -1) return;
+      openTabs.splice(idx, 1);
+
+      if (activeTab === fileName) {
+        if (openTabs.length > 0) {
+          const newIdx = Math.min(idx, openTabs.length - 1);
+          activeTab = openTabs[newIdx].name;
+          renderContent(openTabs[newIdx]);
+        } else {
+          activeTab = null;
+          contentEl.innerHTML = `
+            <div class="empty-state">
+              <svg width="48" height="48" viewBox="0 0 16 16" fill="currentColor"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"/></svg>
+              <p>Select a file from the sidebar to preview</p>
+            </div>`;
+        }
+      }
+      renderTabs();
+      renderFileList(searchBox.value);
+    }
+
+    function renderTabs() {
+      tabBar.innerHTML = '';
+      openTabs.forEach(file => {
+        const tab = document.createElement('div');
+        tab.className = 'tab' + (activeTab === file.name ? ' active' : '');
+        tab.innerHTML = `
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"/>
+          </svg>
+          <span>${file.name}</span>
+          <button class="tab-close" title="Close tab">&times;</button>
+        `;
+        tab.addEventListener('click', () => {
+          activeTab = file.name;
+          renderTabs();
+          renderContent(file);
+          renderFileList(searchBox.value);
+        });
+        tab.querySelector('.tab-close').addEventListener('click', (e) => closeTab(file.name, e));
+        tabBar.appendChild(tab);
+      });
+    }
+
+    function renderContent(file) {
+      contentEl.innerHTML = '<div class="md-body">' + marked.parse(file.content) + '</div>';
+      contentEl.scrollTop = 0;
+    }
+
+    // ===== KEYBOARD =====
+    document.addEventListener('keydown', (e) => {
+      // Ctrl+K = focus search
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        searchBox.focus();
+        searchBox.select();
+      }
+      // Ctrl+W = close active tab
+      if ((e.ctrlKey || e.metaKey) && e.key === 'w') {
+        e.preventDefault();
+        if (activeTab) closeTab(activeTab, e);
+      }
+    });
+
+    // ===== INIT =====
+    renderFileList('');
+
+    // Auto-open first file
+    if (FILES.length > 0) {
+      openFile(FILES[0]);
+    }
+  </script>
+</body>
+</html>
