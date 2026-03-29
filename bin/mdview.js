@@ -49,17 +49,14 @@ function hash(s) { return crypto.createHash('md5').update(s).digest('hex').slice
 
 function openBrowser(targetUrl) {
   const p = process.platform;
-  if (p === 'win32') {
-    const r = path.join(os.tmpdir(), 'mdview_open.html');
-    fs.writeFileSync(r, `<!DOCTYPE html><script>location="${targetUrl}"</script>`);
-    exec(`start "" "${r}"`);
-  } else if (p === 'darwin') exec(`open "${targetUrl}"`);
+  if (p === 'win32') exec(`start "" "${targetUrl}"`);
+  else if (p === 'darwin') exec(`open "${targetUrl}"`);
   else exec(`xdg-open "${targetUrl}"`);
 }
 
 function openView(viewName) {
-  const u = url.pathToFileURL(path.join(MDVIEW_HOME, 'app.html')).href;
-  openBrowser(viewName ? u + '?view=' + viewName : u);
+  const base = `http://127.0.0.1:${API_PORT}/app`;
+  openBrowser(viewName ? base + '?view=' + viewName : base);
 }
 
 // ===== Core: create view =====
@@ -243,6 +240,55 @@ function cmdReset() {
   console.log(`  Reset complete. ${files.length} view(s) deleted.`);
 }
 
+function cmdProtocol(rawUrl) {
+  ensureHome();
+  let parsed;
+  try {
+    parsed = new URL(rawUrl);
+  } catch(e) {
+    console.error('Invalid protocol URL:', rawUrl);
+    process.exit(1);
+  }
+
+  const action = parsed.hostname || '';
+
+  if (action === 'open') {
+    const filePath = decodeURIComponent(parsed.searchParams.get('path') || '');
+    if (!filePath) { console.error('Missing path parameter'); process.exit(1); }
+    cmdOpen(filePath);
+  } else if (action === 'view') {
+    const viewName = parsed.pathname.replace(/^\/+/, '');
+    if (viewName) openView(viewName);
+    else cmdOpenLast();
+  } else {
+    cmdOpenLast();
+  }
+}
+
+function cmdRegister(quiet) {
+  const p = process.platform;
+  try {
+    if (p === 'win32') require('../lib/protocol-win32').register();
+    else if (p === 'darwin') require('../lib/protocol-darwin').register();
+    else require('../lib/protocol-linux').register();
+    if (!quiet) console.log('  mdview:// protocol registered.');
+  } catch(e) {
+    if (!quiet) console.error('  Registration failed:', e.message);
+  }
+}
+
+function cmdUnregister(quiet) {
+  const p = process.platform;
+  try {
+    if (p === 'win32') require('../lib/protocol-win32').unregister();
+    else if (p === 'darwin') require('../lib/protocol-darwin').unregister();
+    else require('../lib/protocol-linux').unregister();
+    if (!quiet) console.log('  mdview:// protocol unregistered.');
+  } catch(e) {
+    if (!quiet) console.error('  Unregistration failed:', e.message);
+  }
+}
+
 function formatAge(ms) {
   const m = Math.floor((Date.now() - ms) / 60000);
   if (m < 1) return 'just now';
@@ -252,6 +298,25 @@ function formatAge(ms) {
   return Math.floor(h / 24) + 'd ago';
 }
 
+// ===== Static file serving helper =====
+function serveStaticFile(filePath, contentType, res) {
+  const resolved = path.resolve(filePath);
+  const normalizedHome = path.resolve(MDVIEW_HOME);
+  if (!resolved.startsWith(normalizedHome + path.sep) && resolved !== normalizedHome) {
+    res.writeHead(403);
+    res.end('Forbidden');
+    return;
+  }
+  try {
+    const data = fs.readFileSync(resolved);
+    res.writeHead(200, { 'Content-Type': contentType });
+    res.end(data);
+  } catch(e) {
+    res.writeHead(404);
+    res.end('Not found');
+  }
+}
+
 // ===== Background API Server =====
 function runServer() {
   ensureHome();
@@ -259,10 +324,90 @@ function runServer() {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    res.setHeader('Content-Type', 'application/json');
     if (req.method === 'OPTIONS') { res.writeHead(200); res.end(); return; }
 
-    const p = new URL(req.url, `http://localhost:${API_PORT}`).pathname;
+    const parsed = new URL(req.url, `http://localhost:${API_PORT}`);
+    const p = parsed.pathname;
+
+    // --- Static file routes ---
+
+    // GET / → redirect to /app
+    if (p === '/' && req.method === 'GET') {
+      res.writeHead(302, { 'Location': '/app' });
+      res.end();
+      return;
+    }
+
+    // GET /app → serve app.html
+    if (p === '/app' && req.method === 'GET') {
+      serveStaticFile(path.join(MDVIEW_HOME, 'app.html'), 'text/html', res);
+      return;
+    }
+
+    // GET /marked.min.js
+    if (p === '/marked.min.js' && req.method === 'GET') {
+      serveStaticFile(path.join(MDVIEW_HOME, 'marked.min.js'), 'application/javascript', res);
+      return;
+    }
+
+    // GET /views-index.js
+    if (p === '/views-index.js' && req.method === 'GET') {
+      serveStaticFile(path.join(MDVIEW_HOME, 'views-index.js'), 'application/javascript', res);
+      return;
+    }
+
+    // GET /last-view.js
+    if (p === '/last-view.js' && req.method === 'GET') {
+      serveStaticFile(path.join(MDVIEW_HOME, 'last-view.js'), 'application/javascript', res);
+      return;
+    }
+
+    // GET /views/<name>.js
+    if (p.startsWith('/views/') && p.endsWith('.js') && req.method === 'GET') {
+      const name = p.slice('/views/'.length, -3);
+      if (name.includes('/') || name.includes('\\') || name.includes('..')) {
+        res.writeHead(400);
+        res.end('Invalid view name');
+        return;
+      }
+      serveStaticFile(path.join(VIEWS_DIR, name + '.js'), 'application/javascript', res);
+      return;
+    }
+
+    // --- API routes ---
+    res.setHeader('Content-Type', 'application/json');
+
+    // GET /api/view-data/<viewName>
+    if (p.startsWith('/api/view-data/') && req.method === 'GET') {
+      const viewName = decodeURIComponent(p.slice('/api/view-data/'.length));
+      if (viewName.includes('/') || viewName.includes('\\') || viewName.includes('..')) {
+        res.writeHead(400);
+        res.end('{"error":"invalid view name"}');
+        return;
+      }
+      const viewFile = path.join(VIEWS_DIR, viewName + '.js');
+      const resolved = path.resolve(viewFile);
+      if (!resolved.startsWith(path.resolve(MDVIEW_HOME) + path.sep)) {
+        res.writeHead(403);
+        res.end('{"error":"forbidden"}');
+        return;
+      }
+      try {
+        const content = fs.readFileSync(resolved, 'utf-8');
+        const match = content.match(/^window\.__MDVIEW_DATA\s*=\s*(\{[\s\S]*\});?\s*$/);
+        if (!match) {
+          res.writeHead(500);
+          res.end('{"error":"failed to parse view data"}');
+          return;
+        }
+        res.writeHead(200);
+        res.end(match[1]);
+      } catch(e) {
+        res.writeHead(404);
+        res.end('{"error":"view not found"}');
+      }
+      return;
+    }
 
     // List views
     if (p === '/api/views' && req.method === 'GET') {
@@ -342,8 +487,8 @@ function runServer() {
     console.error('Server error:', e.message);
   });
 
-  // Auto-exit after 2 hours
-  setTimeout(() => { try { fs.unlinkSync(path.join(MDVIEW_HOME, 'server.pid')); } catch(e) {} process.exit(0); }, 2 * 60 * 60 * 1000);
+  // Auto-exit after 8 hours
+  setTimeout(() => { try { fs.unlinkSync(path.join(MDVIEW_HOME, 'server.pid')); } catch(e) {} process.exit(0); }, 8 * 60 * 60 * 1000);
   process.on('SIGINT', () => { try { fs.unlinkSync(path.join(MDVIEW_HOME, 'server.pid')); } catch(e) {} process.exit(0); });
   process.on('SIGTERM', () => { try { fs.unlinkSync(path.join(MDVIEW_HOME, 'server.pid')); } catch(e) {} process.exit(0); });
 }
@@ -395,6 +540,8 @@ function showHelp() {
     mdview --list         List all saved views
     mdview --reset        Delete all views and start fresh
     mdview --stop         Stop background server
+    mdview --register     Register mdview:// protocol handler
+    mdview --unregister   Unregister protocol handler
     mdview --version      Show version
     mdview --help         Show this help
 
@@ -419,6 +566,16 @@ async function main() {
   if (args.includes('--list') || args.includes('-l')) { cmdList(); return; }
   if (args.includes('--reset')) { cmdReset(); return; }
   if (args.includes('--stop')) { await stopServer(); return; }
+  if (args.includes('--register')) { cmdRegister(args.includes('--quiet')); return; }
+  if (args.includes('--unregister')) { cmdUnregister(args.includes('--quiet')); return; }
+  if (args.includes('--protocol')) {
+    const idx = args.indexOf('--protocol');
+    const rawUrl = args[idx + 1];
+    if (!rawUrl) { console.error('Usage: mdview --protocol <url>'); process.exit(1); }
+    await ensureServer();
+    cmdProtocol(rawUrl);
+    return;
+  }
 
   // Start server in background before opening anything
   await ensureServer();

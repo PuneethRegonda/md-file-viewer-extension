@@ -1140,6 +1140,8 @@
     // ===== DYNAMIC DATA LOADER =====
     // Read ?view= param to load JSON, or fall back to baked-in data
     var API = 'http://127.0.0.1:51437';
+    var IS_HTTP = window.location.protocol === 'http:' || window.location.protocol === 'https:';
+    if (IS_HTTP) API = window.location.origin;
     let _ORIGINAL_FILES = [];
     let FOLDER_NAME = 'MDView';
     let VIEW_NAME = '';
@@ -1161,34 +1163,68 @@
           } else { showEmptyState(); }
         } catch(e) { showEmptyState(); }
       } else if (VIEW_NAME) {
-        var s = document.createElement('script');
-        s.src = './views/' + VIEW_NAME + '.js';
-        s.onload = function () {
-          if (window.__MDVIEW_DATA) {
-            _ORIGINAL_FILES = window.__MDVIEW_DATA.files || [];
-            FOLDER_NAME = window.__MDVIEW_DATA.folderName || VIEW_NAME;
-          }
-          document.title = FOLDER_NAME + ' \u2014 MDView';
-          var el = document.getElementById('viewName');
-          if (el) el.textContent = FOLDER_NAME;
-          initApp();
-        };
-        s.onerror = function () {
-          document.getElementById('pageTransition').classList.remove('active');
-          document.querySelector('.app').innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:12px;color:var(--text-secondary);"><div style="font-size:48px;opacity:0.3;">&#128196;</div><div>View not found</div><div style="font-size:13px;opacity:0.6;">Run <code style="padding:2px 8px;background:var(--bg-secondary);border-radius:4px;">mdview &lt;folder&gt;</code></div></div>';
-        };
-        document.head.appendChild(s);
+        if (IS_HTTP) {
+          // Clean fetch-based loading over HTTP
+          fetch(API + '/api/view-data/' + encodeURIComponent(VIEW_NAME))
+            .then(function(r) {
+              if (!r.ok) throw new Error('not found');
+              return r.json();
+            })
+            .then(function(data) {
+              _ORIGINAL_FILES = data.files || [];
+              FOLDER_NAME = data.folderName || VIEW_NAME;
+              document.title = FOLDER_NAME + ' \u2014 MDView';
+              var el = document.getElementById('viewName');
+              if (el) el.textContent = FOLDER_NAME;
+              initApp();
+            })
+            .catch(function() {
+              document.getElementById('pageTransition').classList.remove('active');
+              document.querySelector('.app').innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:12px;color:var(--text-secondary);"><div style="font-size:48px;opacity:0.3;">&#128196;</div><div>View not found</div><div style="font-size:13px;opacity:0.6;">Run <code style="padding:2px 8px;background:var(--bg-secondary);border-radius:4px;">mdview &lt;folder&gt;</code></div></div>';
+            });
+        } else {
+          // Legacy file:// script injection
+          var s = document.createElement('script');
+          s.src = './views/' + VIEW_NAME + '.js';
+          s.onload = function () {
+            if (window.__MDVIEW_DATA) {
+              _ORIGINAL_FILES = window.__MDVIEW_DATA.files || [];
+              FOLDER_NAME = window.__MDVIEW_DATA.folderName || VIEW_NAME;
+            }
+            document.title = FOLDER_NAME + ' \u2014 MDView';
+            var el = document.getElementById('viewName');
+            if (el) el.textContent = FOLDER_NAME;
+            initApp();
+          };
+          s.onerror = function () {
+            document.getElementById('pageTransition').classList.remove('active');
+            document.querySelector('.app').innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:12px;color:var(--text-secondary);"><div style="font-size:48px;opacity:0.3;">&#128196;</div><div>View not found</div><div style="font-size:13px;opacity:0.6;">Run <code style="padding:2px 8px;background:var(--bg-secondary);border-radius:4px;">mdview &lt;folder&gt;</code></div></div>';
+          };
+          document.head.appendChild(s);
+        }
       } else {
-        // No ?view= — load last-view.js to find most recent
-        var ls = document.createElement('script');
-        ls.src = './last-view.js?t=' + Date.now();
-        ls.onload = function () {
-          if (window.__MDVIEW_LAST) {
-            window.location.replace(window.location.pathname + '?view=' + window.__MDVIEW_LAST);
-          } else { showEmptyState(); }
-        };
-        ls.onerror = function () { showEmptyState(); };
-        document.head.appendChild(ls);
+        if (IS_HTTP) {
+          // HTTP mode: check API for last view
+          fetch(API + '/api/views')
+            .then(function(r) { return r.json(); })
+            .then(function(views) {
+              if (views.length > 0) {
+                window.location.replace(window.location.pathname + '?view=' + views[0].viewName);
+              } else { showEmptyState(); }
+            })
+            .catch(function() { showEmptyState(); });
+        } else {
+          // Legacy file:// mode: load last-view.js
+          var ls = document.createElement('script');
+          ls.src = './last-view.js?t=' + Date.now();
+          ls.onload = function () {
+            if (window.__MDVIEW_LAST) {
+              window.location.replace(window.location.pathname + '?view=' + window.__MDVIEW_LAST);
+            } else { showEmptyState(); }
+          };
+          ls.onerror = function () { showEmptyState(); };
+          document.head.appendChild(ls);
+        }
       }
 
       function showEmptyState() {
