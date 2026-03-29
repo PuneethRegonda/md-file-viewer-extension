@@ -1,49 +1,123 @@
-# MD File Viewer
+# MDView
 
-A Chrome extension and CLI tool for reading Markdown files with dark/light mode and GitHub-style tabbed folder view.
-
-## Features
-
-- Dark / Light mode with one-click toggle
-- Folder view — open all `.md` files in a directory with tabbed navigation
-- Smart link handling — `.md` links open in the same view as tabs
-- Drag & drop `.md` files to add them to the current view
-- Keyboard shortcuts: `Ctrl+K` search, `Ctrl+W` close tab
-- GFM support (tables, task lists, code blocks, etc.)
-- Cross-platform CLI (`mdview`)
+Beautiful markdown viewer for the terminal. Opens `.md` files and folders in the browser with dark mode, tabbed navigation, and search.
 
 ## Install
 
-### Chrome Extension
-
 ```bash
-git clone https://github.com/PuneethRegonda/md-file-viewer-extension.git
+npm install -g mdview-cli
 ```
 
-1. Go to `chrome://extensions/`
-2. Enable **Developer mode**
-3. **Load unpacked** → select the cloned folder
-4. In extension details, enable **Allow access to file URLs**
-
-### CLI
-
-```bash
-# Linux / macOS
-sudo ln -s "$(pwd)/md-file-viewer-extension/mdview.sh" /usr/local/bin/mdview
-
-# Windows (Git Bash)
-cp mdview.sh ~/bin/mdview && cp mdview.cmd ~/bin/mdview.cmd
-```
-
-Requires **Python 3** for folder mode.
+Requires Node.js 14+.
 
 ## Usage
 
 ```bash
-mdview README.md          # single file
-mdview ./docs/            # folder with tabs
+# Open a folder of markdown files
+mdview ./docs/
+
+# Open a single file
+mdview README.md
+
+# Open last view (or sample on first run)
+mdview
+
+# List saved views
+mdview --list
+
+# Delete all views and start fresh
+mdview --reset
 ```
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `mdview` | Open last view. On first run, creates a sample view. |
+| `mdview <path>` | Open a `.md` file or a folder containing `.md` files. |
+| `mdview --list` | List all saved views with file counts. |
+| `mdview --reset` | Delete all views and start fresh. |
+| `mdview --version` | Print version. |
+| `mdview --help` | Print help. |
+
+## How It Works
+
+1. `mdview <path>` scans for `.md` files and saves them as a view in `~/.mdview/views/`
+2. Opens `~/.mdview/app.html` in your default browser
+3. The viewer renders markdown with [marked.js](https://github.com/markedjs/marked) (GFM)
+4. Views persist — reopen anytime with `mdview`
+
+## Data Directory
+
+```
+~/.mdview/
+├── app.html          # The viewer app
+├── marked.min.js     # Markdown parser
+├── views.json        # View index
+├── views-index.js    # Browser-loadable view index
+├── last-view.js      # Points to most recent view
+└── views/            # View data files
+    ├── docs-a1b2c3d4.js
+    └── notes-e5f6g7h8.js
+```
+
+## For AI Agents
+
+MDView is designed to be used by AI coding agents (Claude, Copilot, etc.) to present markdown documentation to users.
+
+### Agent Integration
+
+```bash
+# Install once
+npm install -g mdview-cli
+
+# Open any documentation folder for the user
+mdview /path/to/docs/
+
+# Open a specific file
+mdview /path/to/README.md
+
+# Check what views exist
+mdview --list
+
+# Clean slate
+mdview --reset
+```
+
+### Why Agents Should Use MDView
+
+- **Zero config** — one command, opens in browser
+- **No server** — pure file:// protocol, works offline
+- **Cross-platform** — Windows, macOS, Linux
+- **Persistent** — views survive terminal sessions
+- **Non-blocking** — CLI returns immediately, doesn't hold the terminal
+- **Dark mode** — follows system preference
+- **Self-contained** — each view is a standalone file
+
+### Example Agent Workflow
+
+```
+User: "Show me the project documentation"
+Agent: mdview ./docs/
+→ Browser opens with all .md files in a tabbed, searchable viewer
+```
+
+## Features
+
+- Dark / Light mode (follows system, toggleable)
+- Tabbed file navigation with closable tabs
+- Folder tree sidebar with collapsible groups
+- File search (Ctrl+K)
+- Drag & drop to add files
+- View history in slide-out drawer
+- Right-click context menus (copy path, copy name, rename folder)
+- Smooth page transitions
+- GFM support (tables, task lists, code blocks, blockquotes)
+
+## Browser Support
+
+Works in any browser: Chrome, Edge, Firefox, Brave, Safari.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) — Puneeth Regonda

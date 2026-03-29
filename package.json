@@ -1,0 +1,35 @@
+{
+  "name": "mdview-cli",
+  "version": "1.0.0",
+  "description": "Beautiful markdown viewer — open .md files and folders in the browser with dark mode, tabs, and search",
+  "license": "MIT",
+  "author": "Puneeth Regonda",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PuneethRegonda/md-file-viewer-extension.git"
+  },
+  "homepage": "https://github.com/PuneethRegonda/md-file-viewer-extension",
+  "bin": {
+    "mdview": "./bin/mdview.js"
+  },
+  "files": [
+    "bin/",
+    "folder-viewer.html",
+    "lib/",
+    "LICENSE",
+    "README.md"
+  ],
+  "keywords": [
+    "markdown",
+    "viewer",
+    "cli",
+    "md",
+    "reader",
+    "dark-mode",
+    "preview",
+    "documentation"
+  ],
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

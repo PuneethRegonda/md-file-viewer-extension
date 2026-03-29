@@ -13,5 +13,14 @@ Desktop.ini
 *.tmp
 mdview_*.html
 
+# Node
+node_modules/
+package-lock.json
+
+# Python (future)
+dist/
+*.egg-info/
+__pycache__/
+
 # Claude
 .claude/

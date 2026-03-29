@@ -546,6 +546,21 @@
       background: var(--border);
     }
 
+    /* ===== Page Transition ===== */
+    .page-transition {
+      position: fixed; inset: 0;
+      background: var(--bg);
+      z-index: 999999;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    .page-transition.active {
+      opacity: 1;
+      pointer-events: all;
+    }
+
     .toast {
       position: fixed;
       bottom: 24px;
@@ -654,13 +669,70 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      height: 60vh;
+      height: 70vh;
       color: var(--text-secondary);
-      gap: 12px;
+      gap: 16px;
+      text-align: center;
+      padding: 32px;
     }
 
-    .empty-state svg { opacity: 0.3; }
-    .empty-state p { font-size: 15px; }
+    .empty-state-icon {
+      width: 64px; height: 64px;
+      border-radius: 16px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 24px; font-weight: 800;
+      margin-bottom: 8px;
+    }
+
+    .empty-state h2 {
+      font-size: 20px; font-weight: 700; color: var(--text);
+      margin: 0;
+    }
+
+    .empty-state p {
+      font-size: 14px; line-height: 1.6; max-width: 400px;
+      margin: 0;
+    }
+
+    .empty-state-actions {
+      display: flex; gap: 10px; margin-top: 8px; flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .empty-state-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 10px 20px; border-radius: 8px;
+      font-size: 13px; font-weight: 500; cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--bg-secondary); color: var(--text);
+      font-family: inherit;
+    }
+
+    .empty-state-btn:hover { background: var(--bg-hover); }
+
+    .empty-state-btn.primary {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      color: #fff; border: none;
+    }
+
+    .empty-state-btn.primary:hover { opacity: 0.9; }
+
+    .empty-state-hint {
+      font-size: 12px; opacity: 0.5; margin-top: 4px;
+    }
+
+    .empty-state-cmd {
+      font-family: Consolas, Monaco, monospace;
+      font-size: 13px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 16px;
+      margin-top: 4px;
+    }
+
+    .empty-state-cmd span { color: var(--text-secondary); }
 
     /* ===== Theme Toggle ===== */
     .theme-toggle {
@@ -899,6 +971,15 @@
   </style>
 </head>
 <body>
+  <div class="page-transition active" id="pageTransition"></div>
+  <script>
+    // Fade in on page load
+    window.addEventListener('DOMContentLoaded', function () {
+      setTimeout(function () {
+        document.getElementById('pageTransition').classList.remove('active');
+      }, 50);
+    });
+  </script>
   <div class="app">
     <!-- View Drawer (beside sidebar) -->
     <div class="view-drawer" id="viewDrawer">
@@ -945,9 +1026,18 @@
     <main class="main">
       <div class="tab-bar" id="tabBar"></div>
       <div class="content" id="content">
-        <div class="empty-state">
-          <svg width="48" height="48" viewBox="0 0 16 16" fill="currentColor"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"/></svg>
-          <p>Select a file from the sidebar or drag & drop .md files here</p>
+        <div class="empty-state" id="mainEmptyState">
+          <div class="empty-state-icon">MD</div>
+          <h2>No file selected</h2>
+          <p>Pick a file from the sidebar, or drag & drop markdown files anywhere on this page.</p>
+          <div class="empty-state-actions">
+            <button class="empty-state-btn primary" onclick="document.getElementById('filePicker').click();">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2Z"/></svg>
+              Add files
+            </button>
+          </div>
+          <div class="empty-state-hint">or use the terminal</div>
+          <div class="empty-state-cmd"><span>$</span> mdview ./your-folder/</div>
         </div>
       </div>
     </main>
@@ -1053,14 +1143,13 @@
     let VIEW_NAME = '';
 
     (function loadAndInit() {
-      const params = new URLSearchParams(window.location.search);
+      var params = new URLSearchParams(window.location.search);
       VIEW_NAME = params.get('view') || '';
 
       if (VIEW_NAME) {
-        // Load view data via <script> tag (works on file:// unlike fetch)
-        const script = document.createElement('script');
-        script.src = './views/' + VIEW_NAME + '.js';
-        script.onload = function () {
+        var s = document.createElement('script');
+        s.src = './views/' + VIEW_NAME + '.js';
+        s.onload = function () {
           if (window.__MDVIEW_DATA) {
             _ORIGINAL_FILES = window.__MDVIEW_DATA.files || [];
             FOLDER_NAME = window.__MDVIEW_DATA.folderName || VIEW_NAME;
@@ -1070,16 +1159,179 @@
           if (el) el.textContent = FOLDER_NAME;
           initApp();
         };
-        script.onerror = function () {
-          document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:system-ui;color:#888;font-size:16px;">View not found: <code style="margin:0 6px;padding:2px 8px;background:#f0f0f0;border-radius:4px;">' + VIEW_NAME + '</code><br><br>Run <code style="padding:2px 8px;background:#f0f0f0;border-radius:4px;">mdview &lt;folder&gt;</code> to create a view.</div>';
+        s.onerror = function () {
+          document.getElementById('pageTransition').classList.remove('active');
+          document.querySelector('.app').innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:12px;color:var(--text-secondary);"><div style="font-size:48px;opacity:0.3;">&#128196;</div><div>View not found</div><div style="font-size:13px;opacity:0.6;">Run <code style="padding:2px 8px;background:var(--bg-secondary);border-radius:4px;">mdview &lt;folder&gt;</code></div></div>';
         };
-        document.head.appendChild(script);
+        document.head.appendChild(s);
       } else {
-        document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:system-ui;color:#888;font-size:16px;">No view specified. Run <code style="margin:0 6px;padding:2px 8px;background:#f0f0f0;border-radius:4px;">mdview &lt;folder&gt;</code> to open a view.</div>';
+        // No ?view= — load last-view.js to find most recent
+        var ls = document.createElement('script');
+        ls.src = './last-view.js?t=' + Date.now();
+        ls.onload = function () {
+          if (window.__MDVIEW_LAST) {
+            // Check if hidden
+            var hidden = JSON.parse(localStorage.getItem('mdview-hidden') || '[]');
+            if (hidden.includes(window.__MDVIEW_LAST)) {
+              showEmptyState();
+            } else {
+              window.location.replace(window.location.pathname + '?view=' + window.__MDVIEW_LAST);
+            }
+          } else { showEmptyState(); }
+        };
+        ls.onerror = function () { showEmptyState(); };
+        document.head.appendChild(ls);
+      }
+
+      function showEmptyState() {
+        document.body.innerHTML = '';
+        // Hidden inputs for file/folder picker
+        var folderInput = document.createElement('input');
+        folderInput.type = 'file'; folderInput.style.display = 'none';
+        folderInput.setAttribute('webkitdirectory', ''); folderInput.setAttribute('multiple', '');
+        document.body.appendChild(folderInput);
+
+        var fileInput = document.createElement('input');
+        fileInput.type = 'file'; fileInput.style.display = 'none';
+        fileInput.setAttribute('multiple', ''); fileInput.setAttribute('accept', '.md,.markdown,.mdown');
+        document.body.appendChild(fileInput);
+
+        var landing = document.createElement('div');
+        landing.style.cssText = 'display:flex;min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);';
+
+        // Left panel
+        landing.innerHTML =
+          '<div style="flex:1;display:flex;align-items:center;justify-content:center;padding:48px;">' +
+            '<div style="max-width:520px;width:100%;">' +
+              '<div style="display:flex;align-items:center;gap:12px;margin-bottom:40px;">' +
+                '<div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:800;">MD</div>' +
+                '<div><div style="font-size:20px;font-weight:700;">MDView</div><div style="font-size:12px;color:var(--text-secondary);">v1.0.0</div></div>' +
+              '</div>' +
+
+              '<h1 style="font-size:32px;font-weight:800;margin:0 0 12px;line-height:1.2;">Read markdown<br>beautifully.</h1>' +
+              '<p style="font-size:16px;color:var(--text-secondary);margin:0 0 36px;line-height:1.6;">Open any folder of <code style="padding:2px 6px;background:var(--bg-secondary);border-radius:4px;font-size:14px;">.md</code> files and view them with dark mode, tabs, search, and more.</p>' +
+
+              // Action buttons
+              '<div style="display:flex;gap:12px;margin-bottom:32px;flex-wrap:wrap;">' +
+                '<button id="landingOpenFolder" style="display:inline-flex;align-items:center;gap:8px;padding:12px 24px;border-radius:10px;font-size:14px;font-weight:600;color:#fff;background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none;cursor:pointer;font-family:inherit;">' +
+                  '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75Z"/></svg>' +
+                  'Open Folder' +
+                '</button>' +
+                '<button id="landingOpenFiles" style="display:inline-flex;align-items:center;gap:8px;padding:12px 24px;border-radius:10px;font-size:14px;font-weight:600;color:var(--text);background:var(--bg-secondary);border:1px solid var(--border);cursor:pointer;font-family:inherit;">' +
+                  '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688Z"/></svg>' +
+                  'Open Files' +
+                '</button>' +
+              '</div>' +
+
+              // CLI section
+              '<div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:24px;">' +
+                '<div style="font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:12px;">Or from terminal</div>' +
+                '<div style="font-family:Consolas,Monaco,monospace;font-size:13px;line-height:2.2;color:var(--text);">' +
+                  '<div><span style="color:var(--text-secondary);">$</span> mdview ./docs/</div>' +
+                  '<div><span style="color:var(--text-secondary);">$</span> mdview README.md</div>' +
+                  '<div><span style="color:var(--text-secondary);">$</span> mdview <span style="color:var(--text-secondary);font-style:italic;"># opens last view</span></div>' +
+                '</div>' +
+              '</div>' +
+
+              // Footer links
+              '<div style="display:flex;gap:16px;align-items:center;">' +
+                '<a href="https://github.com/PuneethRegonda/md-file-viewer-extension" target="_blank" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--text-secondary);text-decoration:none;">' +
+                  '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg>' +
+                  'GitHub' +
+                '</a>' +
+                '<span style="color:var(--border);">|</span>' +
+                '<a href="https://buymeacoffee.com/puneethregonda" target="_blank" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--text-secondary);text-decoration:none;">' +
+                  '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M3 2.75C3 1.784 3.784 1 4.75 1h6.5c.966 0 1.75.784 1.75 1.75v1.5a.75.75 0 0 1-.75.75h-8.5A.75.75 0 0 1 3 4.25Zm1.75-.25a.25.25 0 0 0-.25.25v.75h7v-.75a.25.25 0 0 0-.25-.25ZM2.5 6a.75.75 0 0 1 .75-.75h9.5a.75.75 0 0 1 .75.75v5.25a3.25 3.25 0 0 1-3.25 3.25h-4.5A3.25 3.25 0 0 1 2.5 11.25Zm1.5.75v4.5c0 .966.784 1.75 1.75 1.75h4.5c.966 0 1.75-.784 1.75-1.75v-4.5Z"/></svg>' +
+                  'Buy me a coffee' +
+                '</a>' +
+                '<span style="color:var(--border);">|</span>' +
+                '<span style="font-size:12px;color:var(--text-secondary);opacity:0.5;">npm install -g mdview-cli</span>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+
+          // Right decorative panel
+          '<div style="width:400px;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;color:rgba(255,255,255,0.9);">' +
+            '<div style="font-size:80px;font-weight:900;opacity:0.12;">MD</div>' +
+          '</div>';
+
+        document.body.appendChild(landing);
+
+        // Wire up buttons
+        document.getElementById('landingOpenFolder').addEventListener('click', function () { folderInput.click(); });
+        document.getElementById('landingOpenFiles').addEventListener('click', function () { fileInput.click(); });
+
+        function handlePickedFiles(files) {
+          var mdFiles = Array.from(files).filter(function (f) { return /\.(md|markdown|mdown)$/i.test(f.name); });
+          if (mdFiles.length === 0) return;
+
+          // Build view data from picked files
+          var viewFiles = [];
+          var loaded = 0;
+          mdFiles.forEach(function (file) {
+            var reader = new FileReader();
+            reader.onload = function (ev) {
+              var filePath = file.webkitRelativePath || file.name;
+              viewFiles.push({ id: filePath, name: file.name, path: filePath, content: ev.target.result });
+              loaded++;
+              if (loaded === mdFiles.length) {
+                // Determine folder name
+                var folderName = 'Imported';
+                if (mdFiles[0].webkitRelativePath) {
+                  folderName = mdFiles[0].webkitRelativePath.split('/')[0] || 'Imported';
+                }
+                // Set global data and init the app
+                _ORIGINAL_FILES = viewFiles;
+                FOLDER_NAME = folderName;
+                document.title = FOLDER_NAME + ' \u2014 MDView';
+                document.body.innerHTML = '';
+                // Re-add the full app HTML from the template
+                window.location.reload();
+              }
+            };
+            reader.readAsText(file);
+          });
+        }
+
+        folderInput.addEventListener('change', function () { handlePickedFiles(this.files); });
+        fileInput.addEventListener('change', function () { handlePickedFiles(this.files); });
+
+        // Drag and drop on landing page
+        landing.addEventListener('dragover', function (e) { e.preventDefault(); });
+        landing.addEventListener('drop', function (e) {
+          e.preventDefault();
+          handlePickedFiles(e.dataTransfer.files);
+        });
       }
     })();
 
+    // ===== Smooth page navigation =====
+    function smoothNavigate(url) {
+      var overlay = document.getElementById('pageTransition');
+      overlay.classList.add('active');
+      setTimeout(function () {
+        window.location.href = url;
+      }, 300);
+    }
+
     function initApp() {
+
+    // ===== EMPTY STATE HELPER =====
+    function getEmptyStateHTML() {
+      return '<div class="empty-state">' +
+        '<div class="empty-state-icon">MD</div>' +
+        '<h2>No file selected</h2>' +
+        '<p>Pick a file from the sidebar, or drag & drop markdown files here.</p>' +
+        '<div class="empty-state-actions">' +
+          '<button class="empty-state-btn primary" onclick="document.getElementById(\'filePicker\').click();">' +
+            '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2Z"/></svg>' +
+            'Add files' +
+          '</button>' +
+        '</div>' +
+        '<div class="empty-state-hint">or from terminal</div>' +
+        '<div class="empty-state-cmd"><span>$</span> mdview ./folder/</div>' +
+      '</div>';
+    }
 
     // ===== SESSION PERSISTENCE =====
     // Key unique to this viewer instance (based on folder name + file count)
@@ -1376,11 +1628,7 @@
           renderContent(openTabs[newIdx]);
         } else {
           activeTab = null;
-          contentEl.innerHTML = `
-            <div class="empty-state">
-              <svg width="48" height="48" viewBox="0 0 16 16" fill="currentColor"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"/></svg>
-              <p>Select a file from the sidebar or drag & drop .md files here</p>
-            </div>`;
+          contentEl.innerHTML = getEmptyStateHTML();
         }
       }
 
@@ -1419,11 +1667,7 @@
           renderContent(openTabs[newIdx]);
         } else {
           activeTab = null;
-          contentEl.innerHTML = `
-            <div class="empty-state">
-              <svg width="48" height="48" viewBox="0 0 16 16" fill="currentColor"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"/></svg>
-              <p>Select a file from the sidebar or drag & drop .md files here</p>
-            </div>`;
+          contentEl.innerHTML = getEmptyStateHTML();
         }
       }
       renderTabs();
@@ -1671,7 +1915,6 @@
         input.replaceWith(span);
         document.title = viewName + ' \u2014 MDView';
         sessionStorage.setItem(SESSION_KEY + '_viewName', viewName);
-        saveViewToHistory();
         // Re-bind click
         span.addEventListener('click', () => {
           document.getElementById('viewName').click();
@@ -1687,37 +1930,11 @@
 
     document.title = viewName + ' \u2014 MDView';
 
-    // ===== VIEW DRAWER (localStorage — persistent) =====
-    const HISTORY_KEY = 'mdview_history';
+    // ===== VIEW DRAWER (reads views-index.js from disk) =====
     const viewDrawerBtn = document.getElementById('viewDrawerBtn');
     const viewDrawer = document.getElementById('viewDrawer');
     const viewDrawerClose = document.getElementById('viewDrawerClose');
     const viewDrawerList = document.getElementById('viewDrawerList');
-
-    function getViewHistory() {
-      try {
-        return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
-      } catch (e) { return []; }
-    }
-
-    function saveViewToHistory() {
-      const history = getViewHistory();
-      const currentUrl = window.location.href;
-      const existing = history.findIndex(h => h.url === currentUrl);
-      const entry = {
-        name: viewName,
-        url: currentUrl,
-        fileCount: FILES.length,
-        lastOpened: new Date().toISOString()
-      };
-      if (existing !== -1) {
-        history[existing] = entry;
-      } else {
-        history.unshift(entry);
-      }
-      if (history.length > 30) history.length = 30;
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-    }
 
     // ===== CUSTOM CONFIRM DIALOG =====
     const confirmDialog = document.getElementById('confirmDialog');
@@ -1729,7 +1946,7 @@
 
     function showConfirm(title, message, onConfirm) {
       confirmTitle.textContent = title;
-      confirmMessage.textContent = message;
+      confirmMessage.innerHTML = message;
       confirmCallback = onConfirm;
       confirmDialog.classList.add('visible');
     }
@@ -1737,92 +1954,114 @@
     confirmCancel.addEventListener('click', () => {
       confirmDialog.classList.remove('visible');
       confirmCallback = null;
+      // Reset button
+      confirmOk.textContent = 'Delete';
+      confirmOk.style.background = '#e5534b';
+      confirmOk.style.borderColor = '#e5534b';
     });
 
     confirmOk.addEventListener('click', () => {
       confirmDialog.classList.remove('visible');
       if (confirmCallback) confirmCallback();
       confirmCallback = null;
+      // Reset button
+      confirmOk.textContent = 'Delete';
+      confirmOk.style.background = '#e5534b';
+      confirmOk.style.borderColor = '#e5534b';
     });
 
-    function deleteViewFromHistory(url) {
-      const entry = getViewHistory().find(h => h.url === url);
-      const name = entry ? entry.name : 'this view';
-
-      showConfirm(
-        'Delete view',
-        'Delete "' + name + '" permanently? This will remove it from history.',
-        function () {
-          const history = getViewHistory().filter(h => h.url !== url);
-          localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-
-          try {
-            const key = 'mdview_' + (entry ? entry.name : '') + '_state';
-            sessionStorage.removeItem(key);
-          } catch(e) {}
-
-          renderViewDrawer();
-          showToast('View deleted');
-
-          if (url === window.location.href) {
-            if (history.length > 0) {
-              window.location.href = history[0].url;
-            } else {
-              document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:system-ui;color:#888;font-size:16px;">View deleted. Run <code style="margin:0 6px;padding:2px 8px;background:#f0f0f0;border-radius:4px;">mdview &lt;folder&gt;</code> to open a new view.</div>';
-            }
-          }
-        }
-      );
-    }
-
-    function formatTimeAgo(iso) {
-      const diff = Date.now() - new Date(iso).getTime();
-      const mins = Math.floor(diff / 60000);
+    function formatTimeAgo(ms) {
+      var diff = Date.now() - ms;
+      var mins = Math.floor(diff / 60000);
       if (mins < 1) return 'Just now';
       if (mins < 60) return mins + 'm ago';
-      const hrs = Math.floor(mins / 60);
+      var hrs = Math.floor(mins / 60);
       if (hrs < 24) return hrs + 'h ago';
-      const days = Math.floor(hrs / 24);
+      var days = Math.floor(hrs / 24);
       if (days < 7) return days + 'd ago';
-      return new Date(iso).toLocaleDateString();
+      return new Date(ms).toLocaleDateString();
+    }
+
+    function getHiddenViews() {
+      try { return JSON.parse(localStorage.getItem('mdview-hidden') || '[]'); } catch(e) { return []; }
     }
 
     function renderViewDrawer() {
-      const history = getViewHistory();
-      const currentUrl = window.location.href;
+      viewDrawerList.innerHTML = '';
+      var s = document.createElement('script');
+      s.src = './views-index.js?t=' + Date.now();
+      s.onload = function () {
+        var all = window.__MDVIEW_VIEWS || [];
+        var hidden = getHiddenViews();
+        var views = all.filter(function (v) { return !hidden.includes(v.viewName); });
+        renderViewList(views, true);
+      };
+      s.onerror = function () { renderViewList([], false); };
+      document.head.appendChild(s);
+    }
+
+    function renderViewList(views, canDelete) {
       viewDrawerList.innerHTML = '';
 
-      if (history.length === 0) {
-        viewDrawerList.innerHTML = '<li class="view-drawer-empty">No views yet.<br>Open folders with mdview to see them here.</li>';
+      if (views.length === 0) {
+        viewDrawerList.innerHTML = '<li class="view-drawer-empty">No views yet.<br><br>Run <code style="padding:2px 8px;background:var(--bg-secondary);border-radius:4px;">mdview &lt;folder&gt;</code></li>';
         return;
       }
 
-      history.forEach(h => {
-        const li = document.createElement('li');
-        li.className = 'view-entry' + (h.url === currentUrl ? ' active' : '');
-        li.innerHTML = `
-          <div class="view-entry-icon">MD</div>
-          <div class="view-entry-info">
-            <div class="view-entry-name">${h.name}</div>
-            <div class="view-entry-meta">${h.fileCount || '?'} files &middot; ${formatTimeAgo(h.lastOpened)}</div>
-          </div>
-          <button class="view-entry-delete" title="Delete view"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.15l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/></svg></button>
-        `;
-        li.addEventListener('click', (e) => {
+      views.forEach(function (v) {
+        var viewUrl = window.location.pathname + '?view=' + v.viewName;
+        var isActive = VIEW_NAME === v.viewName;
+        var li = document.createElement('li');
+        li.className = 'view-entry' + (isActive ? ' active' : '');
+        li.innerHTML =
+          '<div class="view-entry-icon">MD</div>' +
+          '<div class="view-entry-info">' +
+            '<div class="view-entry-name">' + v.folderName + '</div>' +
+            '<div class="view-entry-meta">' + (v.fileCount || '') + ' files &middot; ' + formatTimeAgo(v.lastOpened) + '</div>' +
+          '</div>' +
+          (canDelete ? '<button class="view-entry-delete" title="Delete view"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.15l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/></svg></button>' : '');
+
+        li.addEventListener('click', function (e) {
           if (e.target.closest('.view-entry-delete')) return;
-          if (h.url !== currentUrl) window.location.href = h.url;
+          if (!isActive) smoothNavigate(viewUrl);
           else closeViewDrawer();
         });
-        li.querySelector('.view-entry-delete').addEventListener('click', (e) => {
+
+        var delBtn = li.querySelector('.view-entry-delete');
+        if (delBtn) delBtn.addEventListener('click', function (e) {
           e.stopPropagation();
-          deleteViewFromHistory(h.url);
+          showConfirm(
+            'Delete view',
+            'Delete <strong>' + v.folderName + '</strong> permanently?',
+            function () {
+              // Hide from UI via localStorage
+              var hidden = getHiddenViews();
+              if (!hidden.includes(v.viewName)) hidden.push(v.viewName);
+              localStorage.setItem('mdview-hidden', JSON.stringify(hidden));
+              showToast('View hidden. Run mdview --clean to delete from disk.');
+
+              if (isActive) {
+                // Find next visible view
+                var all = window.__MDVIEW_VIEWS || [];
+                var next = all.find(function (x) { return !hidden.includes(x.viewName); });
+                if (next) {
+                  smoothNavigate(window.location.pathname + '?view=' + next.viewName);
+                } else {
+                  smoothNavigate(window.location.pathname);
+                }
+              } else {
+                renderViewDrawer();
+              }
+            }
+          );
         });
+
         viewDrawerList.appendChild(li);
       });
     }
 
     function toggleViewDrawer() {
-      const isOpen = viewDrawer.classList.contains('open');
+      var isOpen = viewDrawer.classList.contains('open');
       if (isOpen) {
         viewDrawer.classList.remove('open');
         viewDrawerBtn.classList.remove('active');
@@ -1841,8 +2080,7 @@
     viewDrawerBtn.addEventListener('click', toggleViewDrawer);
     viewDrawerClose.addEventListener('click', closeViewDrawer);
 
-    // Save current view on load
-    saveViewToHistory();
+
 
     // ===== INIT =====
     renderFileList('');
@@ -2078,7 +2316,7 @@
         activeTab = openTabs[0].id;
         renderContent(openTabs[0]);
       } else if (!activeTab) {
-        contentEl.innerHTML = '<div class="empty-state"><svg width="48" height="48" viewBox="0 0 16 16" fill="currentColor"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"/></svg><p>Select a file from the sidebar or drag & drop .md files here</p></div>';
+        contentEl.innerHTML = getEmptyStateHTML();
       }
 
       renderTabs();
