@@ -1210,6 +1210,10 @@
     let FOLDER_NAME = 'MDView';
     let VIEW_NAME = '';
 
+    // Capture hash before browser auto-jumps, then strip it
+    var _pendingHash = window.location.hash.slice(1) || '';
+    if (_pendingHash) history.replaceState(null, '', window.location.href.split('#')[0]);
+
     (function loadAndInit() {
       var params = new URLSearchParams(window.location.search);
       VIEW_NAME = params.get('view') || '';
@@ -1917,8 +1921,7 @@
               if (activeTab === file.id) {
                 contentEl.innerHTML = '<div class="md-body">' + marked.parse(file.content) + '</div>';
                 var hash = window.location.hash.slice(1);
-                if (hash) { var t = document.getElementById(hash); if (t) t.scrollIntoView({ behavior: 'smooth' }); else contentEl.scrollTop = 0; }
-                else contentEl.scrollTop = 0;
+                scrollToHash();
                 interceptMdLinks();
               }
             } else {
@@ -1931,16 +1934,21 @@
         return;
       }
       contentEl.innerHTML = '<div class="md-body">' + marked.parse(file.content) + '</div>';
-      // Scroll to hash anchor if present, otherwise top
-      const hash = window.location.hash.slice(1);
-      if (hash) {
-        const target = document.getElementById(hash);
-        if (target) { target.scrollIntoView({ behavior: 'smooth' }); }
-        else { contentEl.scrollTop = 0; }
-      } else {
-        contentEl.scrollTop = 0;
-      }
+      scrollToHash();
       interceptMdLinks();
+    }
+
+    function scrollToHash() {
+      if (!_pendingHash) { contentEl.scrollTop = 0; return; }
+      const hash = _pendingHash;
+      _pendingHash = ''; // consume it once
+      setTimeout(function() {
+        const target = document.getElementById(hash);
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          setTimeout(function() { window.scrollBy({ top: -20, behavior: 'smooth' }); }, 400);
+        }
+      }, 200);
     }
 
     // ===== INTERCEPT .md LINK CLICKS =====
