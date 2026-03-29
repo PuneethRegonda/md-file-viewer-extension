@@ -1942,8 +1942,8 @@
           e.preventDefault();
           const linkName = href.split('/').pop().split('?')[0];
 
-          // 1. Already in FILES? Match by name (could be multiple — pick first)
-          const matches = FILES.filter(f => f.name === linkName);
+          // 1. Already in FILES? Match by filename (could be multiple — pick first)
+          const matches = FILES.filter(f => baseName(f) === linkName || f.name === linkName);
           if (matches.length === 1) {
             openFile(matches[0]);
             return;
@@ -1979,40 +1979,65 @@
       pendingLinkHref = null;
     });
 
+    // Helper: resolve a linked .md file path relative to the current file
+    function resolveLinkedPath(href) {
+      const linkName = href.split('/').pop().split('?')[0];
+      // Try to find the file in FILES by matching the end of the path
+      const match = FILES.find(f => f.path && f.path.replace(/\\/g, '/').endsWith('/' + linkName));
+      if (match) return { name: linkName, path: match.path, found: true };
+      // Try resolving relative to the active file's directory
+      if (activeTab) {
+        const activeFile = FILES.find(f => f.id === activeTab) || openTabs.find(t => t.id === activeTab);
+        if (activeFile && activeFile.path) {
+          const dir = activeFile.path.replace(/\\/g, '/').replace(/\/[^/]+$/, '');
+          const resolved = dir + '/' + href.replace(/\\/g, '/');
+          return { name: linkName, path: resolved, found: false };
+        }
+      }
+      return { name: linkName, path: href, found: false };
+    }
+
     // Dialog: Open in new browser tab/view
     linkDialogNewView.addEventListener('click', () => {
       linkDialogEl.classList.remove('visible');
-      if (pendingLinkHref) {
-        const resolved = new URL(pendingLinkHref, window.location.href).href;
-        window.open(resolved, '_blank');
-        pendingLinkHref = null;
-      }
+      if (!pendingLinkHref) return;
+      const info = resolveLinkedPath(pendingLinkHref);
+      // Create a new mdview view for this file
+      fetch(API + '/api/views', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folderName: info.name.replace(/\.(md|markdown|mdown)$/i, ''), files: [{ id: info.path, name: info.name, path: info.path }] })
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(result) {
+          if (result.ok && result.viewName) {
+            window.open(window.location.href.split('?')[0] + '?view=' + result.viewName, '_blank');
+          }
+        })
+        .catch(function() { showToast('Server not running'); });
+      pendingLinkHref = null;
     });
 
     // Dialog: Open here in this view
     linkDialogHere.addEventListener('click', () => {
       linkDialogEl.classList.remove('visible');
       if (!pendingLinkHref) return;
+      const info = resolveLinkedPath(pendingLinkHref);
 
-      const linkName = pendingLinkHref.split('/').pop().split('?')[0];
-      const resolved = new URL(pendingLinkHref, window.location.href).href;
-
-      // Try to fetch the file content
-      fetch(resolved)
-        .then(res => {
-          if (!res.ok) throw new Error('Not found');
-          return res.text();
+      // Load via API
+      fetch(API + '/api/file-content?path=' + encodeURIComponent(info.path))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.content) {
+            const newFile = ensureId({ name: info.name, path: info.path, content: data.content });
+            FILES.push(newFile);
+            fileCountEl.textContent = FILES.length;
+            renderFileList(searchBox.value);
+            openFile(newFile);
+          } else { throw new Error('no content'); }
         })
-        .then(content => {
-          const newFile = ensureId({ name: linkName, path: resolved, content: content });
-          FILES.push(newFile);
-          fileCountEl.textContent = FILES.length;
-          renderFileList(searchBox.value);
-          openFile(newFile);
-        })
-        .catch(() => {
-          // fetch failed — prompt user to drag the file instead
-          showConfirm('Cannot open file', 'This file cannot be loaded directly.<br><br>Drag & drop the file into this viewer, or use <code style="padding:2px 6px;background:var(--bg-secondary);border-radius:4px;">mdview &lt;file&gt;</code> from terminal.', null, { hideOk: true, cancelText: 'OK' });
+        .catch(function() {
+          showConfirm('Cannot open file', 'File not found or server not running.<br><br>Drag & drop the file into this viewer, or use <code style="padding:2px 6px;background:var(--bg-secondary);border-radius:4px;">mdview &lt;file&gt;</code> from terminal.', null, { hideOk: true, cancelText: 'OK' });
         });
 
       pendingLinkHref = null;
