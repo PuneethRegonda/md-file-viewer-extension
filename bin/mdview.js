@@ -63,12 +63,27 @@ function openView(viewName) {
 }
 
 const SKIP_DIRS = new Set([
-  'node_modules', '.git', '.svn', '.hg', '.next', '.nuxt',
-  'dist', 'build', 'out', '.output', 'coverage', '.cache',
-  '__pycache__', '.venv', 'venv', '.tox', '.mypy_cache',
-  '.gradle', '.idea', '.vs', '.vscode', 'vendor', 'target',
-  '.terraform', '.serverless', '.amplify'
+  // JS/Node
+  'node_modules', '.next', '.nuxt', '.output',
+  // Version control
+  '.git', '.svn', '.hg',
+  // Build/dist
+  'dist', 'build', 'out', 'coverage', '.cache',
+  // Python
+  '__pycache__', '.venv', 'venv', '.tox', '.mypy_cache', '.pytest_cache',
+  // Java/Kotlin
+  '.gradle', 'target', '.mvn',
+  // IDE
+  '.idea', '.vs', '.vscode',
+  // Misc
+  'vendor', '.terraform', '.serverless', '.amplify',
+  // OS junk
+  'AppData', 'Library', '$RECYCLE.BIN', 'System Volume Information',
 ]);
+
+function isPythonVenv(dirPath) {
+  try { return fs.existsSync(path.join(dirPath, 'pyvenv.cfg')); } catch(e) { return false; }
+}
 
 function walkDir(dir) {
   const results = [];
@@ -79,6 +94,7 @@ function walkDir(dir) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       if (SKIP_DIRS.has(entry.name)) continue;
+      if (isPythonVenv(full)) continue;
       results.push(...walkDir(full));
     } else if (MD_EXT.test(entry.name)) {
       results.push(full);
