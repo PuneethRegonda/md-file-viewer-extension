@@ -1,6 +1,27 @@
-# MDView
+<p align="center">
+  <img src="https://img.shields.io/npm/v/mdview-cli?style=flat-square&color=6366f1" alt="npm version" />
+  <img src="https://img.shields.io/npm/dm/mdview-cli?style=flat-square&color=8b5cf6" alt="downloads" />
+  <img src="https://img.shields.io/github/stars/PuneethRegonda/md-file-viewer-extension?style=flat-square&color=e3b341" alt="stars" />
+  <img src="https://img.shields.io/github/license/PuneethRegonda/md-file-viewer-extension?style=flat-square" alt="license" />
+  <img src="https://komarev.com/ghpvc/?username=PuneethRegonda&repo=md-file-viewer-extension&style=flat-square&color=6366f1&label=views" alt="profile views" />
+</p>
 
-Beautiful markdown viewer for the terminal. Opens `.md` files and folders in the browser with dark mode, tabbed navigation, and search.
+<h1 align="center">MDView</h1>
+
+<p align="center">
+  <strong>Beautiful markdown viewer for the terminal.</strong><br>
+  Open <code>.md</code> files and folders in the browser with dark mode, tabbed navigation, and search.
+</p>
+
+<p align="center">
+  <a href="#install">Install</a> &bull;
+  <a href="#usage">Usage</a> &bull;
+  <a href="#commands">Commands</a> &bull;
+  <a href="#for-ai-agents">For AI Agents</a> &bull;
+  <a href="#features">Features</a>
+</p>
+
+---
 
 ## Install
 
@@ -8,7 +29,9 @@ Beautiful markdown viewer for the terminal. Opens `.md` files and folders in the
 npm install -g mdview-cli
 ```
 
-Requires Node.js 14+.
+> Requires Node.js 14+. No other dependencies.
+
+**First run** creates a sample view automatically — just run `mdview` after install.
 
 ## Usage
 
@@ -25,7 +48,7 @@ mdview
 # List saved views
 mdview --list
 
-# Delete all views and start fresh
+# Start fresh
 mdview --reset
 ```
 
@@ -33,91 +56,138 @@ mdview --reset
 
 | Command | Description |
 |---------|-------------|
-| `mdview` | Open last view. On first run, creates a sample view. |
-| `mdview <path>` | Open a `.md` file or a folder containing `.md` files. |
-| `mdview --list` | List all saved views with file counts. |
+| `mdview` | Open last view. Creates a sample on first run. |
+| `mdview <path>` | Open a `.md` file or folder. |
+| `mdview --list` | List all saved views. |
 | `mdview --reset` | Delete all views and start fresh. |
 | `mdview --version` | Print version. |
 | `mdview --help` | Print help. |
 
 ## How It Works
 
-1. `mdview <path>` scans for `.md` files and saves them as a view in `~/.mdview/views/`
-2. Opens `~/.mdview/app.html` in your default browser
-3. The viewer renders markdown with [marked.js](https://github.com/markedjs/marked) (GFM)
-4. Views persist — reopen anytime with `mdview`
+```
+mdview ./docs/
+  ↓
+Scans for .md files
+  ↓
+Saves view data to ~/.mdview/views/
+  ↓
+Opens app.html in your default browser
+  ↓
+Markdown rendered beautifully with tabs, search, dark mode
+```
+
+Views persist across sessions. Run `mdview` anytime to reopen.
 
 ## Data Directory
 
 ```
 ~/.mdview/
-├── app.html          # The viewer app
-├── marked.min.js     # Markdown parser
-├── views.json        # View index
-├── views-index.js    # Browser-loadable view index
-├── last-view.js      # Points to most recent view
-└── views/            # View data files
+├── app.html            # Viewer app (auto-updated)
+├── marked.min.js       # Markdown parser
+├── views.json          # View registry
+└── views/
     ├── docs-a1b2c3d4.js
     └── notes-e5f6g7h8.js
 ```
 
+---
+
 ## For AI Agents
 
-MDView is designed to be used by AI coding agents (Claude, Copilot, etc.) to present markdown documentation to users.
+MDView is built for AI coding agents (Claude Code, GitHub Copilot, Cursor, etc.) to present markdown documentation to users in a readable format.
 
-### Agent Integration
+### Quick Integration
 
 ```bash
-# Install once
+# One-time install
 npm install -g mdview-cli
 
-# Open any documentation folder for the user
+# Open docs for the user
 mdview /path/to/docs/
 
 # Open a specific file
 mdview /path/to/README.md
 
-# Check what views exist
+# Open last view
+mdview
+
+# List views
 mdview --list
 
 # Clean slate
 mdview --reset
 ```
 
-### Why Agents Should Use MDView
+### Why Use MDView in Your Agent
 
-- **Zero config** — one command, opens in browser
-- **No server** — pure file:// protocol, works offline
-- **Cross-platform** — Windows, macOS, Linux
-- **Persistent** — views survive terminal sessions
-- **Non-blocking** — CLI returns immediately, doesn't hold the terminal
-- **Dark mode** — follows system preference
-- **Self-contained** — each view is a standalone file
+| Benefit | Detail |
+|---------|--------|
+| **Zero config** | One command, opens in browser |
+| **No server** | Pure `file://` protocol, works offline |
+| **Cross-platform** | Windows, macOS, Linux |
+| **Non-blocking** | CLI returns immediately |
+| **Persistent** | Views survive terminal sessions |
+| **Dark mode** | Follows system preference |
+| **Self-contained** | No runtime dependencies |
 
-### Example Agent Workflow
+### Agent Workflow Example
 
 ```
-User: "Show me the project documentation"
-Agent: mdview ./docs/
+User: "Show me the API documentation"
+
+Agent runs: mdview ./docs/api/
+
 → Browser opens with all .md files in a tabbed, searchable viewer
+→ User reads docs with dark mode, search, and navigation
+→ Agent's terminal is free for next command
 ```
+
+### CLAUDE.md Integration
+
+Add this to your project's `CLAUDE.md` to enable MDView:
+
+```markdown
+## Documentation Viewer
+When the user asks to see documentation, use `mdview`:
+- `mdview ./docs/` — open the docs folder
+- `mdview README.md` — open a specific file
+- `mdview` — reopen the last view
+```
+
+---
 
 ## Features
 
-- Dark / Light mode (follows system, toggleable)
-- Tabbed file navigation with closable tabs
-- Folder tree sidebar with collapsible groups
-- File search (Ctrl+K)
-- Drag & drop to add files
-- View history in slide-out drawer
-- Right-click context menus (copy path, copy name, rename folder)
-- Smooth page transitions
-- GFM support (tables, task lists, code blocks, blockquotes)
+- **Dark / Light mode** — follows system preference, one-click toggle
+- **Tabbed navigation** — open multiple files as tabs, close with Ctrl+W
+- **Folder tree** — collapsible sidebar with folder groups
+- **Search** — instant file filter with Ctrl+K
+- **Drag & drop** — add .md files by dragging onto the viewer
+- **View history** — slide-out drawer to switch between views
+- **Context menus** — right-click for copy path, rename, delete
+- **Smooth transitions** — fade animations between views
+- **First-run sample** — welcome view with getting started guide
+- **GFM support** — tables, task lists, code blocks, blockquotes, images
 
 ## Browser Support
 
 Works in any browser: Chrome, Edge, Firefox, Brave, Safari.
 
+## Contributing
+
+```bash
+git clone https://github.com/PuneethRegonda/md-file-viewer-extension.git
+cd md-file-viewer-extension
+npm link    # makes 'mdview' available globally from source
+```
+
+## Support
+
+<a href="https://buymeacoffee.com/puneethregonda">
+  <img src="https://img.shields.io/badge/Buy%20me%20a%20coffee-☕-yellow?style=flat-square" alt="Buy me a coffee" />
+</a>
+
 ## License
 
-[MIT](LICENSE) — Puneeth Regonda
+[MIT](LICENSE) — [Puneeth Regonda](https://github.com/PuneethRegonda)
