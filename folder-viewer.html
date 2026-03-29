@@ -1449,7 +1449,7 @@
         const saved = sessionStorage.getItem(SESSION_KEY);
         if (saved) {
           const state = JSON.parse(saved);
-          if (state.files && state.files.length >= 0) return state.files;
+          if (state.files && state.files.length > 0) return state.files;
         }
       } catch (e) {}
       // First load — use original data
@@ -1795,28 +1795,8 @@
       renderTabs();
       renderFileList(searchBox.value);
 
-      if (file.content) {
-        // Content already loaded
-        renderContent(file);
-        saveFilesToSession();
-      } else {
-        // Lazy-load from API
-        contentEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:200px;color:var(--text-secondary);font-size:13px;">Loading...</div>';
-        fetch(API + '/api/file-content?path=' + encodeURIComponent(file.path))
-          .then(function(r) { return r.json(); })
-          .then(function(data) {
-            if (data.content) {
-              file.content = data.content;
-              if (activeTab === file.id) renderContent(file);
-              saveFilesToSession();
-            } else {
-              contentEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:200px;color:var(--text-secondary);font-size:13px;">Failed to load file</div>';
-            }
-          })
-          .catch(function() {
-            contentEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:200px;color:var(--text-secondary);font-size:13px;">Server not running. Start with: mdview --serve</div>';
-          });
-      }
+      renderContent(file);
+      saveFilesToSession();
     }
 
     function closeTab(fileId, e) {
@@ -1866,6 +1846,28 @@
     }
 
     function renderContent(file) {
+      if (!file.content) {
+        // Lazy-load content if not available
+        contentEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:200px;color:var(--text-secondary);font-size:13px;">Loading...</div>';
+        fetch(API + '/api/file-content?path=' + encodeURIComponent(file.path))
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (data.content) {
+              file.content = data.content;
+              if (activeTab === file.id) {
+                contentEl.innerHTML = '<div class="md-body">' + marked.parse(file.content) + '</div>';
+                contentEl.scrollTop = 0;
+                interceptMdLinks();
+              }
+            } else {
+              contentEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:200px;color:var(--text-secondary);">Failed to load file</div>';
+            }
+          })
+          .catch(function() {
+            contentEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:200px;color:var(--text-secondary);">Server not running</div>';
+          });
+        return;
+      }
       contentEl.innerHTML = '<div class="md-body">' + marked.parse(file.content) + '</div>';
       contentEl.scrollTop = 0;
       interceptMdLinks();
@@ -2054,6 +2056,7 @@
             showToast(loaded + ' file(s) added');
           }
         };
+        reader.onerror = function() { loaded++; };
         reader.readAsText(file);
       });
     });
@@ -2443,6 +2446,7 @@
             showToast(loaded + ' file(s) added to ' + shortFolderName(targetFolder));
           }
         };
+        reader.onerror = function() { loaded++; };
         reader.readAsText(file);
       });
       filePicker.value = ''; // reset for next use
