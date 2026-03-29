@@ -1059,7 +1059,9 @@
     }
 
     .toc-item {
-      display: block;
+      display: flex;
+      align-items: center;
+      gap: 6px;
       width: 100%;
       text-align: left;
       padding: 5px 14px;
@@ -1074,10 +1076,15 @@
       text-overflow: ellipsis;
     }
     .toc-item:hover { background: var(--bg-hover); color: var(--text); }
+    .toc-item .toc-icon { flex-shrink: 0; opacity: 0.5; font-size: 9px; font-weight: 700; width: 18px; text-align: center; }
+    .toc-item .toc-icon svg { vertical-align: middle; }
+    .toc-item .toc-label { overflow: hidden; text-overflow: ellipsis; }
     .toc-item.h1 { font-weight: 600; color: var(--text); }
     .toc-item.h2 { padding-left: 24px; }
     .toc-item.h3 { padding-left: 38px; font-size: 11px; }
     .toc-item.h4 { padding-left: 50px; font-size: 11px; }
+    .toc-divider { height: 1px; background: var(--border); margin: 6px 14px; }
+    .toc-section-label { padding: 6px 14px 2px; font-size: 10px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.6; }
 
     @media print {
       .sidebar, .brand-bar, .tab-bar, .view-drawer, .view-drawer-btn,
@@ -2050,27 +2057,79 @@
     const tocPopup = document.getElementById('tocPopup');
     const tocPopupList = document.getElementById('tocPopupList');
 
+    var headingIcons = { H1: 'H1', H2: 'H2', H3: 'H3', H4: 'H4' };
+    var refSvg = '<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M4.75 3.5a.25.25 0 0 0-.25.25v8.5c0 .138.112.25.25.25h6.5a.25.25 0 0 0 .25-.25v-5.5H8.75A1.75 1.75 0 0 1 7 5.25V2H4.75Zm4.75.062V5.25c0 .138.112.25.25.25h2.688L9.5 3.562ZM2 3.75C2 2.784 2.784 2 3.75 2h4.836c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v5.586A1.75 1.75 0 0 1 11.5 14h-7.5A1.75 1.75 0 0 1 2 12.25V3.75Z"/></svg>';
+
     function updateToc() {
       try {
         const headings = contentEl.querySelectorAll('h1[id], h2[id], h3[id], h4[id]');
-        if (headings.length < 2) {
+        // Find .md file references
+        const mdLinks = [];
+        const seen = new Set();
+        contentEl.querySelectorAll('a[href]').forEach(function(a) {
+          const href = a.getAttribute('href');
+          if (!/\.(md|markdown|mdown)(\?.*)?$/i.test(href)) return;
+          const name = href.split('/').pop().split('?')[0].split('#')[0];
+          if (seen.has(name)) return;
+          seen.add(name);
+          mdLinks.push({ name: name, href: href, el: a, label: a.textContent.trim() || name });
+        });
+
+        if (headings.length < 2 && mdLinks.length === 0) {
           tocBtn.classList.add('hidden');
           tocPopup.classList.remove('visible');
           return;
         }
         tocBtn.classList.remove('hidden');
         tocPopupList.innerHTML = '';
-        headings.forEach(function(h) {
-          var btn = document.createElement('button');
-          btn.className = 'toc-item ' + h.tagName.toLowerCase();
-          btn.textContent = h.textContent;
-          btn.title = h.textContent;
-          btn.addEventListener('click', function() {
-            tocPopup.classList.remove('visible');
-            h.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+        // Headings section
+        if (headings.length > 0) {
+          var hLabel = document.createElement('div');
+          hLabel.className = 'toc-section-label';
+          hLabel.textContent = 'Headings';
+          tocPopupList.appendChild(hLabel);
+
+          headings.forEach(function(h) {
+            var btn = document.createElement('button');
+            btn.className = 'toc-item ' + h.tagName.toLowerCase();
+            btn.innerHTML = '<span class="toc-icon">' + headingIcons[h.tagName] + '</span><span class="toc-label">' + h.textContent + '</span>';
+            btn.title = h.textContent;
+            btn.addEventListener('click', function() {
+              tocPopup.classList.remove('visible');
+              h.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+            tocPopupList.appendChild(btn);
           });
-          tocPopupList.appendChild(btn);
-        });
+        }
+
+        // References section
+        if (mdLinks.length > 0) {
+          if (headings.length > 0) {
+            var divider = document.createElement('div');
+            divider.className = 'toc-divider';
+            tocPopupList.appendChild(divider);
+          }
+          var rLabel = document.createElement('div');
+          rLabel.className = 'toc-section-label';
+          rLabel.textContent = 'Referenced Files';
+          tocPopupList.appendChild(rLabel);
+
+          mdLinks.forEach(function(link) {
+            var btn = document.createElement('button');
+            btn.className = 'toc-item';
+            btn.innerHTML = '<span class="toc-icon">' + refSvg + '</span><span class="toc-label">' + link.label + '</span>';
+            btn.title = link.name;
+            btn.addEventListener('click', function() {
+              tocPopup.classList.remove('visible');
+              // Try to open in current view
+              var match = FILES.find(function(f) { return baseName(f) === link.name || f.name === link.name; });
+              if (match) { openFile(match); }
+              else { link.el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+            });
+            tocPopupList.appendChild(btn);
+          });
+        }
       } catch(e) { tocBtn.classList.add('hidden'); }
     }
 
