@@ -1560,6 +1560,17 @@
 
     // ===== MARKED CONFIG =====
     marked.setOptions({ gfm: true, breaks: true });
+    // Add slug IDs to headings for anchor links
+    const renderer = new marked.Renderer();
+    const defaultHeading = renderer.heading.bind(renderer);
+    renderer.heading = function(text, level) {
+      // text may be an object {text, depth, raw, tokens} in newer marked versions
+      const raw = typeof text === 'object' ? text.text : text;
+      const depth = typeof text === 'object' ? text.depth : level;
+      const slug = raw.toLowerCase().replace(/<[^>]+>/g, '').replace(/[^\w\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').trim();
+      return '<h' + depth + ' id="' + slug + '">' + raw + '</h' + depth + '>';
+    };
+    marked.setOptions({ renderer: renderer });
 
     // ===== SIDEBAR =====
     const fileListEl = document.getElementById('fileList');
@@ -1905,7 +1916,9 @@
               file.content = data.content;
               if (activeTab === file.id) {
                 contentEl.innerHTML = '<div class="md-body">' + marked.parse(file.content) + '</div>';
-                contentEl.scrollTop = 0;
+                var hash = window.location.hash.slice(1);
+                if (hash) { var t = document.getElementById(hash); if (t) t.scrollIntoView({ behavior: 'smooth' }); else contentEl.scrollTop = 0; }
+                else contentEl.scrollTop = 0;
                 interceptMdLinks();
               }
             } else {
@@ -1918,7 +1931,15 @@
         return;
       }
       contentEl.innerHTML = '<div class="md-body">' + marked.parse(file.content) + '</div>';
-      contentEl.scrollTop = 0;
+      // Scroll to hash anchor if present, otherwise top
+      const hash = window.location.hash.slice(1);
+      if (hash) {
+        const target = document.getElementById(hash);
+        if (target) { target.scrollIntoView({ behavior: 'smooth' }); }
+        else { contentEl.scrollTop = 0; }
+      } else {
+        contentEl.scrollTop = 0;
+      }
       interceptMdLinks();
     }
 
