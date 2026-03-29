@@ -418,6 +418,49 @@
 
     .md-body pre::-webkit-scrollbar { height: 6px; }
     .md-body pre::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* ===== Drag & Drop Overlay ===== */
+    .drop-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 99999;
+      background: rgba(0, 0, 0, 0.55);
+      backdrop-filter: blur(4px);
+      align-items: center;
+      justify-content: center;
+    }
+
+    .drop-overlay.visible {
+      display: flex;
+    }
+
+    .drop-box {
+      width: 420px;
+      padding: 48px 32px;
+      border-radius: 16px;
+      border: 3px dashed var(--accent);
+      background: var(--bg);
+      text-align: center;
+      pointer-events: none;
+    }
+
+    .drop-box svg {
+      margin-bottom: 16px;
+      color: var(--accent);
+    }
+
+    .drop-box p {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text);
+      margin: 0 0 6px;
+    }
+
+    .drop-box span {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
   </style>
 </head>
 <body>
@@ -441,13 +484,22 @@
       <div class="content" id="content">
         <div class="empty-state">
           <svg width="48" height="48" viewBox="0 0 16 16" fill="currentColor"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"/></svg>
-          <p>Select a file from the sidebar to preview</p>
+          <p>Select a file from the sidebar or drag & drop .md files here</p>
         </div>
       </div>
     </main>
 
     <!-- Theme Toggle -->
     <button class="theme-toggle" id="themeToggle" title="Toggle dark/light mode"></button>
+
+    <!-- Drop Overlay -->
+    <div class="drop-overlay" id="dropOverlay">
+      <div class="drop-box">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <p>Drop .md files here</p>
+        <span>Files will open as new tabs</span>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -536,7 +588,7 @@
           contentEl.innerHTML = `
             <div class="empty-state">
               <svg width="48" height="48" viewBox="0 0 16 16" fill="currentColor"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"/></svg>
-              <p>Select a file from the sidebar to preview</p>
+              <p>Select a file from the sidebar or drag & drop .md files here</p>
             </div>`;
         }
       }
@@ -585,6 +637,70 @@
         e.preventDefault();
         if (activeTab) closeTab(activeTab, e);
       }
+    });
+
+    // ===== DRAG & DROP =====
+    const dropOverlay = document.getElementById('dropOverlay');
+    let dragCounter = 0;
+
+    document.addEventListener('dragenter', (e) => {
+      e.preventDefault();
+      dragCounter++;
+      if (dragCounter === 1) dropOverlay.classList.add('visible');
+    });
+
+    document.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      dragCounter--;
+      if (dragCounter <= 0) {
+        dragCounter = 0;
+        dropOverlay.classList.remove('visible');
+      }
+    });
+
+    document.addEventListener('dragover', (e) => {
+      e.preventDefault();
+    });
+
+    document.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dragCounter = 0;
+      dropOverlay.classList.remove('visible');
+
+      const droppedFiles = Array.from(e.dataTransfer.files);
+      const mdFiles = droppedFiles.filter(f =>
+        /\.(md|markdown|mdown)$/i.test(f.name)
+      );
+
+      if (mdFiles.length === 0) return;
+
+      let loaded = 0;
+      mdFiles.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = function (ev) {
+          const content = ev.target.result;
+          const newFile = { name: file.name, content: content };
+
+          // Add to FILES array if not already present
+          if (!FILES.find(f => f.name === newFile.name)) {
+            FILES.push(newFile);
+            fileCountEl.textContent = FILES.length;
+          } else {
+            // Update content of existing file
+            const existing = FILES.find(f => f.name === newFile.name);
+            existing.content = content;
+          }
+
+          loaded++;
+          // Open the last dropped file as active, open all as tabs
+          openFile(newFile);
+
+          if (loaded === mdFiles.length) {
+            renderFileList(searchBox.value);
+          }
+        };
+        reader.readAsText(file);
+      });
     });
 
     // ===== INIT =====

@@ -13,6 +13,7 @@ A beautiful, minimal Chrome extension and CLI tool for reading Markdown files �
 - **Dark / Light mode** — Toggle between themes with one click; your preference is remembered
 - **CLI tool** — Open markdown files directly from your terminal with `mdview`
 - **GFM support** — Tables, task lists, fenced code blocks, strikethrough, and more
+- **Drag & drop** — Drag `.md` files directly into the viewer to open them as new tabs
 - **Keyboard shortcuts** — `Ctrl+K` to search files, `Ctrl+W` to close tabs
 - **Cross-platform** — Works on Windows, macOS, and Linux
 - **Zero dependencies** — No build step, no npm, no bundler. Just load and go.
@@ -123,6 +124,7 @@ Just open any `.md` file in Chrome — the extension automatically detects it an
 |----------|--------|
 | `Ctrl+K` / `Cmd+K` | Focus the file search box |
 | `Ctrl+W` / `Cmd+W` | Close the active tab |
+| Drag & drop `.md` files | Opens them as new tabs |
 
 ---
 
