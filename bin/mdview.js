@@ -293,7 +293,7 @@ function runServer() {
   ensureHome();
   const server = http.createServer((req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     res.setHeader('Content-Type', 'application/json');
     if (req.method === 'OPTIONS') { res.writeHead(200); res.end(); return; }
@@ -378,6 +378,38 @@ function runServer() {
       } catch(e) {
         res.writeHead(500); res.end('{"error":"rescan failed"}');
       }
+      return;
+    }
+
+    // Update view file list (persist file/folder removals)
+    if (p.startsWith('/api/views/') && req.method === 'PATCH') {
+      const viewName = decodeURIComponent(p.slice('/api/views/'.length));
+      if (viewName.includes('/') || viewName.includes('\\') || viewName.includes('..')) {
+        res.writeHead(400); res.end('{"error":"invalid view name"}'); return;
+      }
+      let body = '';
+      req.on('data', chunk => body += chunk);
+      req.on('end', () => {
+        try {
+          const update = JSON.parse(body);
+          const files = update.files || [];
+          const viewFile = path.join(VIEWS_DIR, viewName + '.js');
+          if (!fs.existsSync(viewFile)) { res.writeHead(404); res.end('{"error":"view not found"}'); return; }
+          // Read existing view data to preserve sourcePath/folderName
+          const content = fs.readFileSync(viewFile, 'utf-8');
+          const match = content.match(/^window\.__MDVIEW_DATA\s*=\s*(\{[\s\S]*\});?\s*$/);
+          if (!match) { res.writeHead(500); res.end('{"error":"corrupt view data"}'); return; }
+          const data = JSON.parse(match[1]);
+          data.files = files;
+          fs.writeFileSync(viewFile,
+            'window.__MDVIEW_DATA = ' + JSON.stringify(data).replace(/<\//g, '<\\/') + ';', 'utf-8');
+          // Update file count in views.json
+          const views = readViews();
+          const v = views.find(x => x.viewName === viewName);
+          if (v) { v.fileCount = files.length; writeViews(views); }
+          res.end(JSON.stringify({ ok: true, fileCount: files.length }));
+        } catch(e) { res.writeHead(400); res.end('{"error":"invalid json"}'); }
+      });
       return;
     }
 

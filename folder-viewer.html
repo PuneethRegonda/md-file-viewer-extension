@@ -315,6 +315,15 @@
       padding: 0 7px; border-radius: 8px; flex-shrink: 0;
     }
 
+    .toggle-folders-btn {
+      font-size: 10px; font-weight: 500; font-family: inherit;
+      padding: 1px 6px; border-radius: 4px;
+      border: 1px solid var(--border); background: transparent;
+      color: var(--text-secondary); cursor: pointer; flex-shrink: 0;
+      white-space: nowrap;
+    }
+    .toggle-folders-btn:hover { background: var(--bg-hover); color: var(--text); }
+
     .refresh-btn {
       display: flex; align-items: center; justify-content: center;
       width: 22px; height: 22px; border-radius: 4px;
@@ -1038,8 +1047,10 @@
       <div class="sidebar-header">
         <div class="view-name">
           <span class="view-name-text" id="viewName" title="Click to rename this view">Loading...</span>
-          <button class="refresh-btn" id="refreshBtn" title="Refresh — rescan files from disk"><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M1.705 8.005a.75.75 0 0 1 .834.656 5.5 5.5 0 0 0 9.592 2.97l-1.204-1.204a.25.25 0 0 1 .177-.427h3.646a.25.25 0 0 1 .25.25v3.646a.25.25 0 0 1-.427.177l-1.038-1.038a7.001 7.001 0 0 1-12.486-3.196.75.75 0 0 1 .656-.834Zm12.59-1.01a.75.75 0 0 1-.834-.656 5.5 5.5 0 0 0-9.592-2.97l1.204 1.204a.25.25 0 0 1-.177.427H1.25a.25.25 0 0 1-.25-.25V1.104a.25.25 0 0 1 .427-.177l1.038 1.038a7.001 7.001 0 0 1 12.486 3.196.75.75 0 0 1-.656.834Z"/></svg></button>
           <span class="file-count" id="fileCount">0</span>
+          <span style="flex:1"></span>
+          <button class="refresh-btn" id="refreshBtn" title="Refresh — rescan files from disk"><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M1.705 8.005a.75.75 0 0 1 .834.656 5.5 5.5 0 0 0 9.592 2.97l-1.204-1.204a.25.25 0 0 1 .177-.427h3.646a.25.25 0 0 1 .25.25v3.646a.25.25 0 0 1-.427.177l-1.038-1.038a7.001 7.001 0 0 1-12.486-3.196.75.75 0 0 1 .656-.834Zm12.59-1.01a.75.75 0 0 1-.834-.656 5.5 5.5 0 0 0-9.592-2.97l1.204 1.204a.25.25 0 0 1-.177.427H1.25a.25.25 0 0 1-.25-.25V1.104a.25.25 0 0 1 .427-.177l1.038 1.038a7.001 7.001 0 0 1 12.486 3.196.75.75 0 0 1-.656.834Z"/></svg></button>
+          <button class="toggle-folders-btn" id="toggleFoldersBtn">Close all</button>
         </div>
         <input type="text" class="search-box" id="searchBox" placeholder="Filter files..." autocomplete="off">
       </div>
@@ -1124,6 +1135,32 @@
       <button class="context-menu-item" id="ctxRemove" style="color: #e5534b;">
         <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.15l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/></svg>
         Remove from view
+      </button>
+    </div>
+
+    <!-- Tab Context Menu -->
+    <div class="context-menu" id="tabCtxMenu">
+      <button class="context-menu-item" id="tabCtxClose">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"/></svg>
+        Close
+      </button>
+      <button class="context-menu-item" id="tabCtxCloseOthers">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M2 3.75C2 2.784 2.784 2 3.75 2h8.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0 1 12.25 14h-8.5A1.75 1.75 0 0 1 2 12.25Zm1.75-.25a.25.25 0 0 0-.25.25v8.5c0 .138.112.25.25.25h8.5a.25.25 0 0 0 .25-.25v-8.5a.25.25 0 0 0-.25-.25Z"/></svg>
+        Close others
+      </button>
+      <div class="context-menu-divider"></div>
+      <button class="context-menu-item" id="tabCtxCloseLeft">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M7.78 12.53a.75.75 0 0 1-1.06 0L2.47 8.28a.75.75 0 0 1 0-1.06l4.25-4.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042L4.81 7h7.44a.75.75 0 0 1 0 1.5H4.81l2.97 2.97a.75.75 0 0 1 0 1.06Z"/></svg>
+        Close tabs to the left
+      </button>
+      <button class="context-menu-item" id="tabCtxCloseRight">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8.22 3.47a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L11.19 9H3.75a.75.75 0 0 1 0-1.5h7.44L8.22 4.53a.75.75 0 0 1 0-1.06Z"/></svg>
+        Close tabs to the right
+      </button>
+      <div class="context-menu-divider"></div>
+      <button class="context-menu-item" id="tabCtxCloseAll" style="color: #e5534b;">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"/></svg>
+        Close all tabs
       </button>
     </div>
 
@@ -1753,6 +1790,17 @@
 
     searchBox.addEventListener('input', () => renderFileList(searchBox.value));
 
+    // Persist current FILES list to disk (so removals survive refresh)
+    function persistFiles() {
+      if (!VIEW_NAME || VIEW_NAME === '__session__') return;
+      var stripped = FILES.map(function(f) { return { id: f.id, name: f.name, path: f.path }; });
+      fetch(API + '/api/views/' + encodeURIComponent(VIEW_NAME), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ files: stripped })
+      }).catch(function() {});
+    }
+
     // ===== REMOVE FILE FROM VIEW =====
     function removeFile(fileId) {
       // Remove from FILES array
@@ -1779,6 +1827,7 @@
       renderTabs();
       renderFileList(searchBox.value);
       saveFilesToSession();
+      persistFiles();
     }
 
     // ===== TABS =====
@@ -1840,7 +1889,7 @@
           renderFileList(searchBox.value);
         });
         tab.querySelector('.tab-close').addEventListener('click', (e) => closeTab(file.id, e));
-        tab.addEventListener('contextmenu', (e) => showCtxMenu(e, file));
+        tab.addEventListener('contextmenu', (e) => showTabCtxMenu(e, file));
         tabBar.appendChild(tab);
       });
     }
@@ -2330,10 +2379,115 @@
       ctxCopyFolder.style.display = hasRealPath ? 'flex' : 'none';
     }
 
+    // ===== TAB CONTEXT MENU =====
+    const tabCtxMenu = document.getElementById('tabCtxMenu');
+    let tabCtxFile = null;
+
+    function showTabCtxMenu(e, file) {
+      e.preventDefault();
+      e.stopPropagation();
+      tabCtxFile = file;
+      hideCtxMenu();
+      hideFolderCtxMenu();
+      const x = Math.min(e.clientX, window.innerWidth - 220);
+      const y = Math.min(e.clientY, window.innerHeight - 240);
+      tabCtxMenu.style.left = x + 'px';
+      tabCtxMenu.style.top = y + 'px';
+      tabCtxMenu.classList.add('visible');
+
+      // Disable left/right if at edges
+      const idx = openTabs.findIndex(t => t.id === file.id);
+      document.getElementById('tabCtxCloseLeft').style.display = idx > 0 ? 'flex' : 'none';
+      document.getElementById('tabCtxCloseRight').style.display = idx < openTabs.length - 1 ? 'flex' : 'none';
+    }
+
+    function hideTabCtxMenu() { tabCtxMenu.classList.remove('visible'); }
+
+    document.getElementById('tabCtxClose').addEventListener('click', () => {
+      if (tabCtxFile) closeTab(tabCtxFile.id, { stopPropagation: () => {} });
+      hideTabCtxMenu();
+    });
+
+    document.getElementById('tabCtxCloseOthers').addEventListener('click', () => {
+      if (!tabCtxFile) return;
+      const keep = tabCtxFile;
+      openTabs.length = 0;
+      openTabs.push(keep);
+      activeTab = keep.id;
+      renderContent(keep);
+      renderTabs();
+      renderFileList(searchBox.value);
+      saveFilesToSession();
+      hideTabCtxMenu();
+    });
+
+    document.getElementById('tabCtxCloseLeft').addEventListener('click', () => {
+      if (!tabCtxFile) return;
+      const idx = openTabs.findIndex(t => t.id === tabCtxFile.id);
+      if (idx > 0) {
+        openTabs.splice(0, idx);
+        if (!openTabs.find(t => t.id === activeTab)) {
+          activeTab = openTabs[0].id;
+          renderContent(openTabs[0]);
+        }
+        renderTabs();
+        renderFileList(searchBox.value);
+        saveFilesToSession();
+      }
+      hideTabCtxMenu();
+    });
+
+    document.getElementById('tabCtxCloseRight').addEventListener('click', () => {
+      if (!tabCtxFile) return;
+      const idx = openTabs.findIndex(t => t.id === tabCtxFile.id);
+      if (idx < openTabs.length - 1) {
+        openTabs.splice(idx + 1);
+        if (!openTabs.find(t => t.id === activeTab)) {
+          activeTab = openTabs[openTabs.length - 1].id;
+          renderContent(openTabs[openTabs.length - 1]);
+        }
+        renderTabs();
+        renderFileList(searchBox.value);
+        saveFilesToSession();
+      }
+      hideTabCtxMenu();
+    });
+
+    document.getElementById('tabCtxCloseAll').addEventListener('click', () => {
+      openTabs.length = 0;
+      activeTab = null;
+      contentEl.innerHTML = getEmptyStateHTML();
+      renderTabs();
+      renderFileList(searchBox.value);
+      saveFilesToSession();
+      hideTabCtxMenu();
+    });
+
+    // ===== COLLAPSE/EXPAND ALL FOLDERS (toggle) =====
+    let foldersCollapsed = false;
+    const toggleFoldersBtn = document.getElementById('toggleFoldersBtn');
+
+    toggleFoldersBtn.addEventListener('click', () => {
+      if (foldersCollapsed) {
+        collapsedFolders.clear();
+        foldersCollapsed = false;
+        toggleFoldersBtn.textContent = 'Close all';
+      } else {
+        FILES.forEach(f => {
+          const folder = getFileFolder(f);
+          if (folder !== ROOT_FOLDER) collapsedFolders.add(folder);
+        });
+        foldersCollapsed = true;
+        toggleFoldersBtn.textContent = 'Open all';
+      }
+      renderFileList(searchBox.value);
+    });
+
     // Close all menus on click outside
     function hideAllMenus() {
       hideCtxMenu();
       hideFolderCtxMenu();
+      hideTabCtxMenu();
     }
     document.addEventListener('click', hideAllMenus);
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideAllMenus(); });
@@ -2511,6 +2665,7 @@
       renderTabs();
       renderFileList(searchBox.value);
       saveFilesToSession();
+      persistFiles();
       showToast('Folder deleted');
     }
 
