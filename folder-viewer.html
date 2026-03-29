@@ -1474,6 +1474,18 @@
     const openTabs = []; // { id, name, path, content }
     let activeTab = null; // file.id
     const collapsedFolders = new Set(); // folder paths that are collapsed
+    // Pre-collapse all subfolders (depth > 0) on initial load
+    (function initCollapsed() {
+      FILES.forEach(f => {
+        const folder = getFileFolder(f);
+        if (folder === 'Ungrouped') return;
+        const parts = folder.split('/');
+        // Collapse every path segment beyond the first level
+        for (let i = 1; i < parts.length; i++) {
+          collapsedFolders.add(parts.slice(0, i + 1).join('/'));
+        }
+      });
+    })();
 
     // Helper: get folder group for a file
     function getFileFolder(file) {
@@ -1525,85 +1537,125 @@
 
     fileCountEl.textContent = FILES.length;
 
+    // Build a nested tree from flat file list
+    function buildTree(files) {
+      const root = { children: {}, files: [] };
+      files.forEach(file => {
+        const folder = getFileFolder(file);
+        if (folder === 'Ungrouped') { root.files.push(file); return; }
+        const parts = folder.split('/');
+        let node = root;
+        parts.forEach(part => {
+          if (!node.children[part]) node.children[part] = { children: {}, files: [] };
+          node = node.children[part];
+        });
+        node.files.push(file);
+      });
+      return root;
+    }
+
     function renderFileList(filter) {
       fileListEl.innerHTML = '';
       fileCountEl.textContent = FILES.length;
       const q = (filter || '').toLowerCase();
       const filtered = FILES.filter(f => f.name.toLowerCase().includes(q));
+      const tree = buildTree(filtered);
 
-      // Group by folder
-      const folders = new Map();
-      filtered.forEach(file => {
-        const folderName = getFileFolder(file);
-        if (!folders.has(folderName)) folders.set(folderName, []);
-        folders.get(folderName).push(file);
+      // Render root-level files (Ungrouped)
+      if (tree.files.length > 0) {
+        const rootGroup = createFolderGroup('Ungrouped', 'Ungrouped', tree.files, 0, tree.files.length);
+        fileListEl.appendChild(rootGroup);
+      }
+
+      // Render nested folders
+      Object.keys(tree.children).sort().forEach(name => {
+        renderTreeNode(name, name, tree.children[name], fileListEl, 0);
+      });
+    }
+
+    function renderTreeNode(name, fullPath, node, parent, depth) {
+      // Count all files in this subtree
+      function countFiles(n) {
+        let c = n.files.length;
+        Object.values(n.children).forEach(child => c += countFiles(child));
+        return c;
+      }
+      const totalFiles = countFiles(node);
+      if (totalFiles === 0) return;
+
+      const group = createFolderGroup(name, fullPath, node.files, depth, totalFiles);
+      parent.appendChild(group);
+
+      // Render child folders nested inside this group's files container
+      const filesContainer = group.querySelector('.folder-files');
+      Object.keys(node.children).sort().forEach(childName => {
+        renderTreeNode(childName, fullPath + '/' + childName, node.children[childName], filesContainer, depth + 1);
+      });
+    }
+
+    function createFolderGroup(name, fullPath, files, depth, totalFiles) {
+      const group = document.createElement('div');
+      group.className = 'folder-group' + (collapsedFolders.has(fullPath) ? ' collapsed' : '');
+
+      const isOriginalFolder = _ORIGINAL_FILES.some(f => getFileFolder(f) === fullPath);
+
+      // Folder header
+      const header = document.createElement('div');
+      header.className = 'folder-header';
+      header.title = fullPath;
+      if (depth > 0) header.style.paddingLeft = (10 + depth * 12) + 'px';
+      header.innerHTML = `
+        <svg class="folder-chevron" width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M4.427 7.427l3.396 3.396a.25.25 0 0 0 .354 0l3.396-3.396A.25.25 0 0 0 11.396 7H4.604a.25.25 0 0 0-.177.427z"/></svg>
+        <svg class="folder-header-icon" width="14" height="14" viewBox="0 0 16 16" fill="var(--folder-icon)"><path d="M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75Z"/></svg>
+        <span class="folder-header-name">${name}</span>
+        <span class="folder-file-count">${totalFiles || files.length}</span>
+        <button class="folder-action delete" title="Delete folder"><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.15l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/></svg></button>
+      `;
+
+      header.addEventListener('click', (e) => {
+        if (e.target.closest('.folder-action')) return;
+        if (collapsedFolders.has(fullPath)) collapsedFolders.delete(fullPath);
+        else collapsedFolders.add(fullPath);
+        group.classList.toggle('collapsed');
       });
 
-      folders.forEach((files, folderName) => {
-        const group = document.createElement('div');
-        group.className = 'folder-group' + (collapsedFolders.has(folderName) ? ' collapsed' : '');
+      header.querySelector('.folder-action.delete').addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteFolder(fullPath);
+      });
 
-        const isOriginalFolder = _ORIGINAL_FILES.some(f => getFileFolder(f) === folderName);
+      header.addEventListener('contextmenu', (e) => showFolderCtxMenu(e, fullPath, header));
 
-        // Folder header
-        const header = document.createElement('div');
-        header.className = 'folder-header';
-        header.title = folderName;
-        header.innerHTML = `
-          <svg class="folder-chevron" width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M4.427 7.427l3.396 3.396a.25.25 0 0 0 .354 0l3.396-3.396A.25.25 0 0 0 11.396 7H4.604a.25.25 0 0 0-.177.427z"/></svg>
-          <svg class="folder-header-icon" width="14" height="14" viewBox="0 0 16 16" fill="var(--folder-icon)"><path d="M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75Z"/></svg>
-          <span class="folder-header-name">${shortFolderName(folderName)}</span>
-          <span class="folder-file-count">${files.length}</span>
-          <button class="folder-action delete" title="Delete folder"><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.15l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/></svg></button>
+      group.appendChild(header);
+
+      // File items container (also holds child folders)
+      const filesContainer = document.createElement('div');
+      filesContainer.className = 'folder-files';
+
+      files.forEach(file => {
+        const item = document.createElement('div');
+        item.className = 'file-item' + (activeTab === file.id ? ' active' : '');
+        item.title = file.path || file.name;
+        if (depth >= 0) item.style.paddingLeft = (14 + (depth + 1) * 12) + 'px';
+        item.innerHTML = `
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"/>
+          </svg>
+          <span class="file-name">${displayName(file)}</span>
+          <button class="file-remove" title="Remove from view">&times;</button>
         `;
-
-        // Toggle collapse (ignore clicks on action buttons)
-        header.addEventListener('click', (e) => {
-          if (e.target.closest('.folder-action')) return;
-          if (collapsedFolders.has(folderName)) collapsedFolders.delete(folderName);
-          else collapsedFolders.add(folderName);
-          group.classList.toggle('collapsed');
-        });
-
-        // Delete button
-        header.querySelector('.folder-action.delete').addEventListener('click', (e) => {
+        item.querySelector('.file-name').addEventListener('click', () => openFile(file));
+        item.querySelector('svg').addEventListener('click', () => openFile(file));
+        item.querySelector('.file-remove').addEventListener('click', (e) => {
           e.stopPropagation();
-          deleteFolder(folderName);
+          removeFile(file.id);
         });
-
-        // Right-click on folder header
-        header.addEventListener('contextmenu', (e) => showFolderCtxMenu(e, folderName, header));
-
-        group.appendChild(header);
-
-        // File items
-        const filesContainer = document.createElement('div');
-        filesContainer.className = 'folder-files';
-
-        files.forEach(file => {
-          const item = document.createElement('div');
-          item.className = 'file-item' + (activeTab === file.id ? ' active' : '');
-          item.title = file.path || file.name;
-          item.innerHTML = `
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"/>
-            </svg>
-            <span class="file-name">${displayName(file)}</span>
-            <button class="file-remove" title="Remove from view">&times;</button>
-          `;
-          item.querySelector('.file-name').addEventListener('click', () => openFile(file));
-          item.querySelector('svg').addEventListener('click', () => openFile(file));
-          item.querySelector('.file-remove').addEventListener('click', (e) => {
-            e.stopPropagation();
-            removeFile(file.id);
-          });
-          item.addEventListener('contextmenu', (e) => showCtxMenu(e, file));
-          filesContainer.appendChild(item);
-        });
-
-        group.appendChild(filesContainer);
-        fileListEl.appendChild(group);
+        item.addEventListener('contextmenu', (e) => showCtxMenu(e, file));
+        filesContainer.appendChild(item);
       });
+
+      group.appendChild(filesContainer);
+      return group;
     }
 
     // ===== FOLDER RENAME =====
