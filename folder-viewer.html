@@ -793,6 +793,7 @@
       font-weight: 600;
       line-height: 1.3;
       margin-top: 1.75em;
+      scroll-margin-top: 60px;
       margin-bottom: 0.75em;
       color: var(--heading);
     }
@@ -1660,18 +1661,15 @@
     themeBtn.addEventListener('click', () => applyTheme(theme === 'light' ? 'dark' : 'light'));
 
     // ===== MARKED CONFIG =====
-    marked.setOptions({ gfm: true, breaks: true });
     // Add slug IDs to headings for anchor links
     const renderer = new marked.Renderer();
-    const defaultHeading = renderer.heading.bind(renderer);
-    renderer.heading = function(text, level) {
-      // text may be an object {text, depth, raw, tokens} in newer marked versions
-      const raw = typeof text === 'object' ? text.text : text;
-      const depth = typeof text === 'object' ? text.depth : level;
+    renderer.heading = function(token) {
+      const raw = typeof token === 'object' ? token.text : token;
+      const depth = typeof token === 'object' ? token.depth : 1;
       const slug = raw.toLowerCase().replace(/<[^>]+>/g, '').replace(/[^\w\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').trim();
-      return '<h' + depth + ' id="' + slug + '">' + raw + '</h' + depth + '>';
+      return '<h' + depth + ' id="' + slug + '">' + raw + '</h' + depth + '>\n';
     };
-    marked.setOptions({ renderer: renderer });
+    marked.setOptions({ gfm: true, breaks: true, renderer: renderer });
 
     // ===== SIDEBAR =====
     const fileListEl = document.getElementById('fileList');
@@ -2040,13 +2038,10 @@
     function scrollToHash() {
       if (!_pendingHash) { contentEl.scrollTop = 0; return; }
       const hash = _pendingHash;
-      _pendingHash = ''; // consume it once
+      _pendingHash = '';
       setTimeout(function() {
         const target = document.getElementById(hash);
-        if (target) {
-          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          setTimeout(function() { window.scrollBy({ top: -20, behavior: 'smooth' }); }, 400);
-        }
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 200);
     }
 
@@ -2056,30 +2051,35 @@
     const tocPopupList = document.getElementById('tocPopupList');
 
     function updateToc() {
-      const headings = contentEl.querySelectorAll('.md-body h1, .md-body h2, .md-body h3, .md-body h4');
-      if (headings.length < 2) {
-        tocBtn.classList.add('hidden');
-        tocPopup.classList.remove('visible');
-        return;
-      }
-      tocBtn.classList.remove('hidden');
-      tocPopupList.innerHTML = '';
-      headings.forEach(function(h) {
-        var btn = document.createElement('button');
-        btn.className = 'toc-item ' + h.tagName.toLowerCase();
-        btn.textContent = h.textContent;
-        btn.title = h.textContent;
-        btn.addEventListener('click', function() {
-          h.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          setTimeout(function() { window.scrollBy({ top: -20, behavior: 'smooth' }); }, 400);
+      try {
+        const headings = contentEl.querySelectorAll('h1[id], h2[id], h3[id], h4[id]');
+        if (headings.length < 2) {
+          tocBtn.classList.add('hidden');
           tocPopup.classList.remove('visible');
+          return;
+        }
+        tocBtn.classList.remove('hidden');
+        tocPopupList.innerHTML = '';
+        headings.forEach(function(h) {
+          var btn = document.createElement('button');
+          btn.className = 'toc-item ' + h.tagName.toLowerCase();
+          btn.textContent = h.textContent;
+          btn.title = h.textContent;
+          btn.addEventListener('click', function() {
+            tocPopup.classList.remove('visible');
+            h.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          });
+          tocPopupList.appendChild(btn);
         });
-        tocPopupList.appendChild(btn);
-      });
+      } catch(e) { tocBtn.classList.add('hidden'); }
     }
 
-    tocBtn.addEventListener('click', function() {
+    tocBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
       tocPopup.classList.toggle('visible');
+    });
+    tocPopup.addEventListener('click', function(e) {
+      e.stopPropagation();
     });
     document.getElementById('tocPopupClose').addEventListener('click', function() {
       tocPopup.classList.remove('visible');
