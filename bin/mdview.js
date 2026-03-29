@@ -62,11 +62,23 @@ function openView(viewName) {
   openBrowser(viewName ? u + '?view=' + viewName : u);
 }
 
+const SKIP_DIRS = new Set([
+  'node_modules', '.git', '.svn', '.hg', '.next', '.nuxt',
+  'dist', 'build', 'out', '.output', 'coverage', '.cache',
+  '__pycache__', '.venv', 'venv', '.tox', '.mypy_cache',
+  '.gradle', '.idea', '.vs', '.vscode', 'vendor', 'target',
+  '.terraform', '.serverless', '.amplify'
+]);
+
 function walkDir(dir) {
   const results = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name.startsWith('.') && !MD_EXT.test(entry.name)) {
+      if (entry.isDirectory()) continue; // skip dot-directories
+    }
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
+      if (SKIP_DIRS.has(entry.name)) continue;
       results.push(...walkDir(full));
     } else if (MD_EXT.test(entry.name)) {
       results.push(full);
@@ -243,7 +255,9 @@ function cmdOpenLast() {
 
 function cmdList() {
   ensureHome();
-  const views = readViews();
+  const all = readViews();
+  const views = all.filter(v => fs.existsSync(path.join(VIEWS_DIR, v.viewName + '.js')));
+  if (views.length !== all.length) writeViews(views);
   if (!views.length) { console.log('  No views. Run: mdview <folder>'); return; }
   console.log(`\n  MDView — ${views.length} view(s)\n`);
   views.forEach(v => {
