@@ -201,7 +201,28 @@
     .file-item svg { flex-shrink: 0; opacity: 0.6; }
     .file-item.active svg { opacity: 1; }
 
-    .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+
+    .file-remove {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      opacity: 0;
+      flex-shrink: 0;
+      margin-left: auto;
+    }
+
+    .file-item:hover .file-remove { opacity: 0.5; }
+    .file-remove:hover { opacity: 1 !important; background: var(--bg-hover); color: #e5534b; }
 
     /* ===== Main Content ===== */
     .main {
@@ -419,6 +440,76 @@
     .md-body pre::-webkit-scrollbar { height: 6px; }
     .md-body pre::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
+    /* ===== Link Dialog ===== */
+    .link-dialog-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 100000;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(3px);
+      align-items: center;
+      justify-content: center;
+    }
+
+    .link-dialog-overlay.visible {
+      display: flex;
+    }
+
+    .link-dialog {
+      width: 380px;
+      padding: 24px;
+      border-radius: 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+    }
+
+    .link-dialog h3 {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      margin: 0 0 6px;
+    }
+
+    .link-dialog p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin: 0 0 20px;
+      word-break: break-all;
+    }
+
+    .link-dialog-buttons {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .link-dialog-btn {
+      padding: 7px 16px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      background: var(--bg-secondary);
+      color: var(--text);
+    }
+
+    .link-dialog-btn:hover {
+      background: var(--bg-hover);
+    }
+
+    .link-dialog-btn.primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+
+    .link-dialog-btn.primary:hover {
+      opacity: 0.9;
+    }
+
     /* ===== Drag & Drop Overlay ===== */
     .drop-overlay {
       display: none;
@@ -492,6 +583,19 @@
     <!-- Theme Toggle -->
     <button class="theme-toggle" id="themeToggle" title="Toggle dark/light mode"></button>
 
+    <!-- Link Dialog -->
+    <div class="link-dialog-overlay" id="linkDialog">
+      <div class="link-dialog">
+        <h3>Open markdown file</h3>
+        <p id="linkDialogFile"></p>
+        <div class="link-dialog-buttons">
+          <button class="link-dialog-btn" id="linkDialogCancel">Cancel</button>
+          <button class="link-dialog-btn" id="linkDialogNewView">New View</button>
+          <button class="link-dialog-btn primary" id="linkDialogHere">Open Here</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Drop Overlay -->
     <div class="drop-overlay" id="dropOverlay">
       <div class="drop-box">
@@ -504,24 +608,92 @@
 
   <script>
     // ===== DATA (injected by CLI) =====
-    const FILES = {{FILES_JSON}};
+    const _ORIGINAL_FILES = {{FILES_JSON}};
     const FOLDER_NAME = '{{FOLDER_NAME}}';
 
+    // ===== SESSION PERSISTENCE =====
+    // Key unique to this viewer instance (based on folder name + file count)
+    const SESSION_KEY = 'mdview_' + FOLDER_NAME + '_state';
+
+    // ===== ENSURE IDs =====
+    let _fileIdCounter = Date.now();
+    function ensureId(file) {
+      if (!file.id) {
+        // Only use path as id if it's a real path (not just a bare filename)
+        const hasRealPath = file.path && (file.path.includes('/') || file.path.includes('\\'));
+        file.id = hasRealPath ? file.path : ('file_' + (++_fileIdCounter) + '_' + file.name);
+      }
+      if (!file.path) file.path = file.id;
+      return file;
+    }
+
+    // Helper: display name — shows .../parent/filename.md when duplicates exist
+    function displayName(file) {
+      const dupes = FILES.filter(f => f.name === file.name);
+      if (dupes.length > 1 && file.path) {
+        const parts = file.path.replace(/\\/g, '/').split('/');
+        if (parts.length >= 3) {
+          return '\u2026/' + parts[parts.length - 2] + '/' + file.name;
+        } else if (parts.length === 2) {
+          return parts[0] + '/' + file.name;
+        }
+      }
+      return file.name;
+    }
+
+    // Load state from session, or fall back to original baked-in files
+    function loadFilesFromSession() {
+      try {
+        const saved = sessionStorage.getItem(SESSION_KEY);
+        if (saved) {
+          const state = JSON.parse(saved);
+          if (state.files && state.files.length >= 0) return state.files;
+        }
+      } catch (e) {}
+      // First load — use original data
+      return _ORIGINAL_FILES.map(f => ensureId({...f}));
+    }
+
+    function saveFilesToSession() {
+      try {
+        // Save files (without content for size, but we need content for rendering)
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify({
+          files: FILES.map(f => ({ id: f.id, name: f.name, path: f.path, content: f.content })),
+          activeTab: activeTab,
+          openTabIds: openTabs.map(t => t.id)
+        }));
+      } catch (e) {
+        // sessionStorage might be full for very large files — silently fail
+      }
+    }
+
+    function loadSessionTabState() {
+      try {
+        const saved = sessionStorage.getItem(SESSION_KEY);
+        if (saved) {
+          const state = JSON.parse(saved);
+          return { activeTab: state.activeTab, openTabIds: state.openTabIds || [] };
+        }
+      } catch (e) {}
+      return null;
+    }
+
     // ===== STATE =====
-    const openTabs = []; // { name, content }
-    let activeTab = null;
+    const FILES = loadFilesFromSession();
+    const openTabs = []; // { id, name, path, content }
+    let activeTab = null; // file.id
 
     // ===== THEME =====
     const root = document.documentElement;
     const themeBtn = document.getElementById('themeToggle');
-    let theme = localStorage.getItem('md-viewer-theme') || 'light';
+    let theme = sessionStorage.getItem('md-viewer-theme') || 'light';
     applyTheme(theme);
 
     function applyTheme(t) {
       theme = t;
       root.setAttribute('data-theme', t);
       themeBtn.textContent = t === 'light' ? '\u{1F319}' : '\u2600\uFE0F';
-      localStorage.setItem('md-viewer-theme', t);
+      sessionStorage.setItem('md-viewer-theme', t);
     }
 
     themeBtn.addEventListener('click', () => applyTheme(theme === 'light' ? 'dark' : 'light'));
@@ -543,45 +715,86 @@
 
       filtered.forEach(file => {
         const item = document.createElement('div');
-        item.className = 'file-item' + (activeTab === file.name ? ' active' : '');
+        item.className = 'file-item' + (activeTab === file.id ? ' active' : '');
+        item.title = file.path || file.name;
         item.innerHTML = `
           <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
             <path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"/>
           </svg>
-          <span class="file-name">${file.name}</span>
+          <span class="file-name">${displayName(file)}</span>
+          <button class="file-remove" title="Remove from view">&times;</button>
         `;
-        item.addEventListener('click', () => openFile(file));
+        item.querySelector('.file-name').addEventListener('click', () => openFile(file));
+        item.querySelector('svg').addEventListener('click', () => openFile(file));
+        item.querySelector('.file-remove').addEventListener('click', (e) => {
+          e.stopPropagation();
+          removeFile(file.id);
+        });
         fileListEl.appendChild(item);
       });
     }
 
     searchBox.addEventListener('input', () => renderFileList(searchBox.value));
 
+    // ===== REMOVE FILE FROM VIEW =====
+    function removeFile(fileId) {
+      // Remove from FILES array
+      const fileIdx = FILES.findIndex(f => f.id === fileId);
+      if (fileIdx !== -1) FILES.splice(fileIdx, 1);
+      fileCountEl.textContent = FILES.length;
+
+      // Close tab if open
+      const tabIdx = openTabs.findIndex(t => t.id === fileId);
+      if (tabIdx !== -1) openTabs.splice(tabIdx, 1);
+
+      // If it was the active tab, switch to another
+      if (activeTab === fileId) {
+        if (openTabs.length > 0) {
+          const newIdx = Math.min(tabIdx, openTabs.length - 1);
+          activeTab = openTabs[newIdx].id;
+          renderContent(openTabs[newIdx]);
+        } else {
+          activeTab = null;
+          contentEl.innerHTML = `
+            <div class="empty-state">
+              <svg width="48" height="48" viewBox="0 0 16 16" fill="currentColor"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"/></svg>
+              <p>Select a file from the sidebar or drag & drop .md files here</p>
+            </div>`;
+        }
+      }
+
+      renderTabs();
+      renderFileList(searchBox.value);
+      saveFilesToSession();
+    }
+
     // ===== TABS =====
     const tabBar = document.getElementById('tabBar');
     const contentEl = document.getElementById('content');
 
     function openFile(file) {
+      ensureId(file);
       // Add to tabs if not already open
-      if (!openTabs.find(t => t.name === file.name)) {
+      if (!openTabs.find(t => t.id === file.id)) {
         openTabs.push(file);
       }
-      activeTab = file.name;
+      activeTab = file.id;
       renderTabs();
       renderContent(file);
       renderFileList(searchBox.value);
+      saveFilesToSession();
     }
 
-    function closeTab(fileName, e) {
+    function closeTab(fileId, e) {
       e.stopPropagation();
-      const idx = openTabs.findIndex(t => t.name === fileName);
+      const idx = openTabs.findIndex(t => t.id === fileId);
       if (idx === -1) return;
       openTabs.splice(idx, 1);
 
-      if (activeTab === fileName) {
+      if (activeTab === fileId) {
         if (openTabs.length > 0) {
           const newIdx = Math.min(idx, openTabs.length - 1);
-          activeTab = openTabs[newIdx].name;
+          activeTab = openTabs[newIdx].id;
           renderContent(openTabs[newIdx]);
         } else {
           activeTab = null;
@@ -594,27 +807,29 @@
       }
       renderTabs();
       renderFileList(searchBox.value);
+      saveFilesToSession();
     }
 
     function renderTabs() {
       tabBar.innerHTML = '';
       openTabs.forEach(file => {
         const tab = document.createElement('div');
-        tab.className = 'tab' + (activeTab === file.name ? ' active' : '');
+        tab.className = 'tab' + (activeTab === file.id ? ' active' : '');
+        tab.title = file.path || file.name;
         tab.innerHTML = `
           <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
             <path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"/>
           </svg>
-          <span>${file.name}</span>
+          <span>${displayName(file)}</span>
           <button class="tab-close" title="Close tab">&times;</button>
         `;
         tab.addEventListener('click', () => {
-          activeTab = file.name;
+          activeTab = file.id;
           renderTabs();
           renderContent(file);
           renderFileList(searchBox.value);
         });
-        tab.querySelector('.tab-close').addEventListener('click', (e) => closeTab(file.name, e));
+        tab.querySelector('.tab-close').addEventListener('click', (e) => closeTab(file.id, e));
         tabBar.appendChild(tab);
       });
     }
@@ -626,45 +841,108 @@
     }
 
     // ===== INTERCEPT .md LINK CLICKS =====
+    const linkDialogEl = document.getElementById('linkDialog');
+    const linkDialogFileEl = document.getElementById('linkDialogFile');
+    const linkDialogCancel = document.getElementById('linkDialogCancel');
+    const linkDialogNewView = document.getElementById('linkDialogNewView');
+    const linkDialogHere = document.getElementById('linkDialogHere');
+    let pendingLinkHref = null;
+
     function interceptMdLinks() {
       contentEl.querySelectorAll('a[href]').forEach(link => {
         const href = link.getAttribute('href');
         if (!/\.(md|markdown|mdown)(\?.*)?$/i.test(href)) return;
 
+        // Style .md links to show they're openable in-view
+        link.style.cursor = 'pointer';
+
         link.addEventListener('click', (e) => {
           e.preventDefault();
-
-          // Extract filename from href (could be relative path like ./guide.md or ../other.md)
           const linkName = href.split('/').pop().split('?')[0];
 
-          // Check if file is already loaded in FILES
-          const match = FILES.find(f => f.name === linkName);
-          if (match) {
-            openFile(match);
+          // 1. Already in FILES? Match by name (could be multiple — pick first)
+          const matches = FILES.filter(f => f.name === linkName);
+          if (matches.length === 1) {
+            openFile(matches[0]);
+            return;
+          }
+          if (matches.length > 1) {
+            // Multiple files with same name — try to match by path in href
+            const byPath = matches.find(f => f.path && href.includes(f.path.split('/').slice(-2).join('/')));
+            openFile(byPath || matches[0]);
             return;
           }
 
-          // Try to fetch the file (works for file:// if same folder, or http)
-          const resolvedUrl = new URL(href, window.location.href).href;
-          fetch(resolvedUrl)
-            .then(res => {
-              if (!res.ok) throw new Error('Not found');
-              return res.text();
-            })
-            .then(content => {
-              const newFile = { name: linkName, content: content };
-              FILES.push(newFile);
-              fileCountEl.textContent = FILES.length;
-              renderFileList(searchBox.value);
-              openFile(newFile);
-            })
-            .catch(() => {
-              // Can't fetch — fall back to opening in new tab
-              window.open(resolvedUrl, '_blank');
-            });
+          // 2. Already open in a tab? Switch to it.
+          const tabMatch = openTabs.find(t => t.name === linkName);
+          if (tabMatch) {
+            activeTab = tabMatch.id;
+            renderTabs();
+            renderContent(tabMatch);
+            renderFileList(searchBox.value);
+            return;
+          }
+
+          // 3. Unknown file — ask the user
+          pendingLinkHref = href;
+          linkDialogFileEl.textContent = linkName;
+          linkDialogEl.classList.add('visible');
         });
       });
     }
+
+    // Dialog: Cancel
+    linkDialogCancel.addEventListener('click', () => {
+      linkDialogEl.classList.remove('visible');
+      pendingLinkHref = null;
+    });
+
+    // Dialog: Open in new browser tab/view
+    linkDialogNewView.addEventListener('click', () => {
+      linkDialogEl.classList.remove('visible');
+      if (pendingLinkHref) {
+        const resolved = new URL(pendingLinkHref, window.location.href).href;
+        window.open(resolved, '_blank');
+        pendingLinkHref = null;
+      }
+    });
+
+    // Dialog: Open here in this view
+    linkDialogHere.addEventListener('click', () => {
+      linkDialogEl.classList.remove('visible');
+      if (!pendingLinkHref) return;
+
+      const linkName = pendingLinkHref.split('/').pop().split('?')[0];
+      const resolved = new URL(pendingLinkHref, window.location.href).href;
+
+      // Try to fetch the file content
+      fetch(resolved)
+        .then(res => {
+          if (!res.ok) throw new Error('Not found');
+          return res.text();
+        })
+        .then(content => {
+          const newFile = ensureId({ name: linkName, path: resolved, content: content });
+          FILES.push(newFile);
+          fileCountEl.textContent = FILES.length;
+          renderFileList(searchBox.value);
+          openFile(newFile);
+        })
+        .catch(() => {
+          // fetch failed — prompt user to drag the file instead
+          alert('Cannot read this file directly.\n\nDrag & drop the file into this viewer to open it.');
+        });
+
+      pendingLinkHref = null;
+    });
+
+    // Close dialog on Escape
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && linkDialogEl.classList.contains('visible')) {
+        linkDialogEl.classList.remove('visible');
+        pendingLinkHref = null;
+      }
+    });
 
     // ===== KEYBOARD =====
     document.addEventListener('keydown', (e) => {
@@ -677,7 +955,10 @@
       // Ctrl+W = close active tab
       if ((e.ctrlKey || e.metaKey) && e.key === 'w') {
         e.preventDefault();
-        if (activeTab) closeTab(activeTab, e);
+        if (activeTab) {
+          const fakeEvent = { stopPropagation: () => {} };
+          closeTab(activeTab, fakeEvent);
+        }
       }
     });
 
@@ -721,24 +1002,27 @@
         const reader = new FileReader();
         reader.onload = function (ev) {
           const content = ev.target.result;
-          const newFile = { name: file.name, content: content };
+          // Use webkitRelativePath for real path, fallback to name
+          const filePath = file.webkitRelativePath || file.name;
 
-          // Add to FILES array if not already present
-          if (!FILES.find(f => f.name === newFile.name)) {
+          // Check if this exact content+name already exists (same file dragged again)
+          const duplicate = FILES.find(f => f.name === file.name && f.content === content);
+          if (duplicate) {
+            // Same file — just open existing tab
+            openFile(duplicate);
+          } else {
+            // New file (even if same name) — always add with unique id
+            const newFile = { name: file.name, path: filePath, content: content };
+            ensureId(newFile); // generates unique id with timestamp
             FILES.push(newFile);
             fileCountEl.textContent = FILES.length;
-          } else {
-            // Update content of existing file
-            const existing = FILES.find(f => f.name === newFile.name);
-            existing.content = content;
+            openFile(newFile);
           }
 
           loaded++;
-          // Open the last dropped file as active, open all as tabs
-          openFile(newFile);
-
           if (loaded === mdFiles.length) {
             renderFileList(searchBox.value);
+            saveFilesToSession();
           }
         };
         reader.readAsText(file);
@@ -748,8 +1032,26 @@
     // ===== INIT =====
     renderFileList('');
 
-    // Auto-open first file
-    if (FILES.length > 0) {
+    // Restore tab state from session, or open first file
+    const savedState = loadSessionTabState();
+    if (savedState && savedState.openTabIds.length > 0) {
+      savedState.openTabIds.forEach(id => {
+        const file = FILES.find(f => f.id === id);
+        if (file && !openTabs.find(t => t.id === id)) openTabs.push(file);
+      });
+      const activeFile = FILES.find(f => f.id === savedState.activeTab);
+      if (activeFile) {
+        activeTab = activeFile.id;
+        renderTabs();
+        renderContent(activeFile);
+        renderFileList(searchBox.value);
+      } else if (openTabs.length > 0) {
+        activeTab = openTabs[0].id;
+        renderTabs();
+        renderContent(openTabs[0]);
+        renderFileList(searchBox.value);
+      }
+    } else if (FILES.length > 0) {
       openFile(FILES[0]);
     }
   </script>

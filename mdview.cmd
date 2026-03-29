@@ -78,9 +78,10 @@ files = []
 for p in patterns:
     for f in sorted(glob.glob(os.path.join(target, p))):
         name = os.path.basename(f)
-        if not any(x['name'] == name for x in files):
+        fpath = os.path.abspath(f).replace('\\\\', '/')
+        if not any(x['id'] == fpath for x in files):
             with open(f, 'r', encoding='utf-8', errors='replace') as fh:
-                files.append({'name': name, 'content': fh.read()})
+                files.append({'id': fpath, 'name': name, 'path': fpath, 'content': fh.read()})
 
 if not files:
     print('No markdown files found.')

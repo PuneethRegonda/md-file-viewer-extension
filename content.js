@@ -29,7 +29,7 @@
   root.className = 'md-viewer-root';
 
   // Load saved theme or default to light
-  const savedTheme = localStorage.getItem('md-viewer-theme') || 'light';
+  const savedTheme = sessionStorage.getItem('md-viewer-theme') || 'light';
   root.setAttribute('data-theme', savedTheme);
 
   // Create theme toggle button
@@ -43,7 +43,7 @@
     const current = root.getAttribute('data-theme');
     const next = current === 'light' ? 'dark' : 'light';
     root.setAttribute('data-theme', next);
-    localStorage.setItem('md-viewer-theme', next);
+    sessionStorage.setItem('md-viewer-theme', next);
     updateToggleIcon(toggle, next);
 
     // Sync to extension storage so popup stays in sync
@@ -80,7 +80,7 @@
       if (changes.theme) {
         const newTheme = changes.theme.newValue;
         root.setAttribute('data-theme', newTheme);
-        localStorage.setItem('md-viewer-theme', newTheme);
+        sessionStorage.setItem('md-viewer-theme', newTheme);
         updateToggleIcon(toggle, newTheme);
       }
     });

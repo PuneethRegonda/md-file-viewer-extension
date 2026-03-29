@@ -16,8 +16,12 @@ if [ -f "$SCRIPT_DIR/manifest.json" ]; then
 elif [ -f "$SCRIPT_DIR/../lib/md-file-viewer-extension/manifest.json" ]; then
   EXT_DIR="$SCRIPT_DIR/../lib/md-file-viewer-extension"
 else
-  # Fallback: look for extension in common install locations
+  # Fallback: check config file, then common install locations
+  if [ -f "$HOME/.mdview_ext_dir" ]; then
+    EXT_DIR="$(cat "$HOME/.mdview_ext_dir")"
+  fi
   for d in \
+    "$EXT_DIR" \
     "$HOME/.md-file-viewer-extension" \
     "$HOME/.local/share/md-file-viewer-extension" \
     "/usr/local/share/md-file-viewer-extension"; do
@@ -74,8 +78,11 @@ OS="$(detect_os)"
 find_python() {
   for cmd in python3 python py; do
     if command -v "$cmd" &>/dev/null; then
-      echo "$cmd"
-      return
+      # Verify it actually works (Windows Store stub returns non-zero)
+      if "$cmd" --version &>/dev/null; then
+        echo "$cmd"
+        return
+      fi
     fi
   done
   echo ""
@@ -196,9 +203,10 @@ files = []
 for p in patterns:
     for f in sorted(glob.glob(os.path.join(target, p))):
         name = os.path.basename(f)
-        if not any(x['name'] == name for x in files):
+        fpath = os.path.abspath(f).replace('\\\\', '/')
+        if not any(x['id'] == fpath for x in files):
             with open(f, 'r', encoding='utf-8', errors='replace') as fh:
-                files.append({'name': name, 'content': fh.read()})
+                files.append({'id': fpath, 'name': name, 'path': fpath, 'content': fh.read()})
 
 with open(os.path.join(ext_dir, 'folder-viewer.html'), 'r', encoding='utf-8') as f:
     html = f.read()
