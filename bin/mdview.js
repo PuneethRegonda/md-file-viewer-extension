@@ -513,6 +513,40 @@ function stopServer() {
   });
 }
 
+function cmdUpdate() {
+  console.log('  Checking for updates...\n');
+  const { execSync } = require('child_process');
+  try {
+    const result = execSync('npm install -g mdview-cli@latest', { encoding: 'utf-8', stdio: 'pipe' });
+    const match = result.match(/mdview-cli@([\d.]+)/);
+    console.log(match ? `  Updated to v${match[1]}` : '  Updated to latest.');
+  } catch(e) {
+    console.error('  Update failed. Try: sudo npm install -g mdview-cli@latest');
+  }
+}
+
+function cmdUninstall() {
+  console.log('  Uninstalling MDView...\n');
+  // Stop server first
+  try {
+    const pid = fs.readFileSync(path.join(MDVIEW_HOME, 'server.pid'), 'utf-8').trim();
+    process.kill(parseInt(pid));
+  } catch(e) {}
+  // Clean up ~/.mdview/
+  try {
+    fs.rmSync(MDVIEW_HOME, { recursive: true, force: true });
+    console.log('  Removed ' + MDVIEW_HOME);
+  } catch(e) {}
+  // Uninstall npm package
+  const { execSync } = require('child_process');
+  try {
+    execSync('npm uninstall -g mdview-cli', { stdio: 'pipe' });
+    console.log('  Uninstalled mdview-cli. Goodbye!');
+  } catch(e) {
+    console.error('  npm uninstall failed. Try: sudo npm uninstall -g mdview-cli');
+  }
+}
+
 function showHelp() {
   console.log(`
   MDView v${VERSION}
@@ -524,6 +558,8 @@ function showHelp() {
     mdview --list         List all saved views
     mdview --reset        Delete all views and start fresh
     mdview --stop         Stop background server
+    mdview --update       Update to latest version
+    mdview --uninstall    Remove mdview and all data
     mdview --version      Show version
     mdview --help         Show this help
 
@@ -548,6 +584,8 @@ async function main() {
   if (args.includes('--list') || args.includes('-l')) { cmdList(); return; }
   if (args.includes('--reset')) { cmdReset(); return; }
   if (args.includes('--stop')) { await stopServer(); return; }
+  if (args.includes('--update')) { cmdUpdate(); return; }
+  if (args.includes('--uninstall')) { cmdUninstall(); return; }
 
   // Start server in background before opening anything
   await ensureServer();
