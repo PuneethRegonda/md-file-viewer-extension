@@ -9,7 +9,7 @@ const { exec, spawn } = require('child_process');
 const url = require('url');
 const http = require('http');
 
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 const PACKAGE_ROOT = path.resolve(__dirname, '..');
 const MDVIEW_HOME = path.join(os.homedir(), '.mdview');
 const VIEWS_DIR = path.join(MDVIEW_HOME, 'views');
